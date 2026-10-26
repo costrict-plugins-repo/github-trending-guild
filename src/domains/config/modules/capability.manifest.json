@@ -1,0 +1,43 @@
+{
+  "schema_version": "guild.module_manifest.v1",
+  "id": "capability",
+  "title": "Capability Routing",
+  "kind": "substrate",
+  "implementation_mode": "workflow-backed",
+  "description": "Ranks and resolves task capability, model tier, backend selection, and role/capability metadata.",
+  "depends_on": [
+    "config",
+    "dispatch",
+    "host-runtime",
+    "kernel",
+    "lifecycle",
+    "review",
+    "security",
+    "state",
+    "telemetry",
+    "teams"
+  ],
+  "owns": {
+    "commands": [
+      "adopt",
+      "models"
+    ],
+    "scripts": [
+      "score-tier",
+      "models-cmd",
+      "capability-adopt",
+      "capability-migration-boundary",
+      "capability-profile",
+      "definition-ref-for-dispatch",
+      "self-build-canonicalize",
+      "workspace-role-localize",
+      "lib/core/contracts/project-capability-profile",
+      "lib/role-model-schema",
+      "lib/role-resolver",
+      "score-tier"
+    ],
+    "script_id_prefixes": [
+      "lib/capability/"
+    ]
+  }
+}

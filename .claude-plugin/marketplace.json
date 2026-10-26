@@ -1,0 +1,34 @@
+{
+  "name": "guild",
+  "description": "Guild marketplace for Claude Code plugins focused on specialist agent teams, durable memory, and evidence-based evolution.",
+  "owner": {
+    "name": "Miguel Pinto",
+    "email": "guild@lookatitude.com"
+  },
+  "plugins": [
+    {
+      "name": "guild",
+      "source": "./",
+      "description": "A team-of-specialists plugin for AI coding hosts: 15 domain specialist type templates across engineering, content, and commercial groups (minted into your project on demand) plus 3 machinery agents, the v2 single-verb lifecycle (init · ideate · plan · build · qa · ops), a categorized wiki with decision capture, and a self-evolution loop with shadow-mode gating.",
+      "version": "3.2.0",
+      "homepage": "https://guildstack.dev",
+      "repository": "https://github.com/lookatitude/guild",
+      "author": {
+        "name": "Miguel Pinto",
+        "email": "guild@lookatitude.com"
+      },
+      "license": "MIT",
+      "keywords": [
+        "agents",
+        "subagents",
+        "agent-team",
+        "skills",
+        "specialists",
+        "wiki",
+        "self-evolution",
+        "tmux",
+        "mcp"
+      ]
+    }
+  ]
+}

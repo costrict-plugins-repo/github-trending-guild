@@ -1,0 +1,632 @@
+#!/usr/bin/env -S npx tsx
+/**
+ * hooks/maybe-reflect.ts
+ *
+ * Events:  Stop  |  SubagentStop                   (v1.3 — F12 widened)
+ * Purpose: Fires guild:reflect ONLY if the §13.2 heuristic gate is satisfied.
+ *
+ * Stop branch (the original /guild lifecycle path):
+ *   ✓  ≥ 1 specialist dispatched  → SubagentStop with non-empty specialist field
+ *   ✓  ≥ 1 file edited            → PostToolUse with tool "Write" or "Edit"
+ *   ✓  No error event             → all events have ok: true
+ *
+ * SubagentStop branch (v1.3 — F12 widened — dev-team work):
+ *   ✓  process.env.GUILD_ENABLE_DEVTEAM_REFLECT === "1"   (operator opt-in; default off)
+ *   ✓  ≥ 3 SubagentStop dispatches accumulated in the run's events.ndjson
+ *       (counted from the existing capture-telemetry.ts log — no new state file)
+ *   ✓  .guild/spec/<slug>.md exists for the active task
+ *       (slug from GUILD_SPEC_SLUG env var; falls back to "any spec exists")
+ *
+ * If gate fails → no-op (silent, exit 0). Prevents spurious reflections on
+ * non-task sessions (§15.2 risk: "Stop hook fires on non-task sessions") and
+ * trivial dev-team work that doesn't deserve a reflection.
+ *
+ * Wiring (hooks.json): registered on BOTH Stop and SubagentStop — the
+ * SubagentStop branch above is reachable in production. On SubagentStop,
+ * hooks.json runs capture-telemetry.js BEFORE this script so the CURRENT
+ * dispatch is already appended to the log by the time devteamSubagentGateCheck
+ * counts dispatches.
+ *
+ * Design note (F12 dispatch counter):
+ * ---------------------------------------------------------------------
+ * The ≥ 3 dispatch threshold reads from the existing events.ndjson rather
+ * than introducing a new state file (e.g., `.guild/runs/<id>/agent-team/
+ * counter.json`). Reasoning:
+ *   - capture-telemetry.ts already appends one event per SubagentStop
+ *     with the agent's name in `specialist` (see hooks/capture-telemetry.ts).
+ *   - A separate counter file would be a second write surface (more code,
+ *     two-source-of-truth coherence problem, extra cleanup).
+ *   - Counting from events.ndjson is O(events) per gate evaluation but
+ *     events lists are bounded by the run length, and gate evaluation
+ *     happens at most once per SubagentStop, so the cost is fine.
+ * ---------------------------------------------------------------------
+ *
+ * If gate passes:
+ *   1. Attempt to run scripts/trace-summarize.ts (tooling-engineer ships in P5 Task 3).
+ *      If that script is missing, produce a compact stub summary from events.ndjson.
+ *      Either way, write .guild/runs/<run-id>/summary.md.
+ *   2. Emit one line to stdout telling the orchestrator to invoke guild:reflect:
+ *        GUILD_REFLECT run_id=<run-id>
+ *      The orchestrator reads this and invokes guild:reflect.
+ *
+ * Run-id resolution (T3b, session_context §5) — via lib/hook-binding
+ * authorizeHookWrite(): the explicit binding env (GUILD_RUN_ID [+
+ * GUILD_RUN_BINDING_REF]) verified against the run's minted binding, ONLY.
+ * Sentinels are interactive intake, never a writer identity; the old
+ * session_id/date fallbacks were unbound identities and are retired. A
+ * refused binding skips reflection for the turn (fail closed). There is no
+ * reflection writer fallback.
+ *
+ * Working directory resolution (priority order):
+ *   1. GUILD_CWD env var
+ *   2. stdin payload cwd field
+ *   3. process.cwd()
+ *
+ * Stdin:   JSON — Claude Code Stop or SubagentStop hook payload.
+ * Stdout:  Either empty (gate failed) or "GUILD_REFLECT run_id=<id>" (gate passed).
+ * Stderr:  Diagnostic messages + (self-build only) the codex-skip DISCIPLINE banner.
+ * Exit:    0 in all normal paths. EXCEPTION (self-build only): exits 2 when the
+ *          codex adversarial-review skip streak reaches >= 3 consecutive
+ *          reflections (FU-E) — the loudest honest escalation a Stop hook has,
+ *          paired with the .guild/codex-skip-streak.json blocking sentinel.
+ *
+ * Runner:  npx -y tsx hooks/maybe-reflect.ts
+ */
+
+import * as fs from "fs";
+import * as path from "path";
+import { spawnSync } from "child_process";
+
+import { resolveGuildRoot } from "./lib/guild-root.js";
+import { authorizeHookWrite, formatBindingRejected } from "./lib/hook-binding.js";
+import { detectSelfBuild } from "./lib/self-build.js";
+// T10 (KTD23/R45): the layout bootstrap, fail-open wrapper for hook entries.
+import { ensureStorageLayout } from "./lib/ensure-layout.js";
+import { durableGuildDir } from "../src/domains/state";
+
+// ── Types ──────────────────────────────────────────────────────────────────
+
+interface HookPayload {
+  session_id?: string;
+  cwd?: string;
+  hook_event_name?: string;
+  stop_reason?: string;
+}
+
+interface TelemetryEvent {
+  ts: string;
+  event: string;
+  tool: string;
+  specialist: string;
+  payload_digest: string;
+  ok: boolean;
+  ms: number;
+  // Present on the canonical v1.4 `tool_call` event (hooks/post-tool-use.ts),
+  // which is now the SOLE writer of tool-call lines to the canonical file —
+  // capture-telemetry.ts's own PostToolUse-shaped line (ok: boolean) was
+  // removed from the canonical file to fix the double-logging finding (see
+  // capture-telemetry.ts's header). gateCheck() below reads both shapes.
+  status?: "ok" | "err" | "n/a";
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+
+/** Read all stdin into a string. */
+async function readStdin(): Promise<string> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    process.stdin.on("data", (c: Buffer) => chunks.push(c));
+    process.stdin.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    process.stdin.on("error", () => resolve(""));
+  });
+}
+
+/** Load and parse an NDJSON telemetry file; returns empty array if missing or unparseable. */
+function loadEvents(eventsFile: string): TelemetryEvent[] {
+  if (!fs.existsSync(eventsFile)) return [];
+  const content = fs.readFileSync(eventsFile, "utf8");
+  const events: TelemetryEvent[] = [];
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      events.push(JSON.parse(trimmed) as TelemetryEvent);
+    } catch {
+      // skip malformed lines
+    }
+  }
+  return events;
+}
+
+/**
+ * Heuristic gate — all three conditions must hold:
+ *   1. ≥ 1 specialist dispatched (SubagentStop with non-empty specialist)
+ *   2. ≥ 1 file edited (a Write/Edit tool call — either shape below)
+ *   3. No error event (no explicit ok:false / status:"err")
+ *
+ * Two event shapes are recognized for (2)/(3), since capture-telemetry.ts no
+ * longer duplicates PostToolUse into the canonical file (double-logging fix):
+ *   - legacy: `event: "PostToolUse", tool, ok: boolean`
+ *     (capture-telemetry.ts's events.ndjson mirror, or an older canonical log)
+ *   - canonical v1.4: `event: "tool_call", tool, status: "ok"|"err"|"n/a"`
+ *     (hooks/post-tool-use.ts — the sole canonical writer for tool-call lines)
+ */
+function gateCheck(events: TelemetryEvent[]): boolean {
+  if (events.length === 0) return false;
+
+  const hasSpecialist = events.some(
+    (e) => e.event === "SubagentStop" && e.specialist && e.specialist.trim().length > 0
+  );
+  const isFileEditCall = (e: TelemetryEvent): boolean =>
+    (e.event === "PostToolUse" || e.event === "tool_call") &&
+    (e.tool === "Write" || e.tool === "Edit");
+  const hasFileEdit = events.some(isFileEditCall);
+  const hasError = events.some((e) => e.ok === false || e.status === "err");
+
+  return hasSpecialist && hasFileEdit && !hasError;
+}
+
+/**
+ * v1.3 — F12: dev-team SubagentStop gate. Fires only when ALL three
+ * guards hold; default-off via the env var.
+ *
+ *   1. process.env.GUILD_ENABLE_DEVTEAM_REFLECT === "1"  (operator opt-in)
+ *   2. ≥ 3 SubagentStop dispatches in events.ndjson      (threshold filter)
+ *   3. .guild/spec/<slug>.md exists                      (something to reflect against)
+ *
+ * Slug resolution: GUILD_SPEC_SLUG env var first; if unset, falls back to
+ * "any *.md exists under .guild/spec/" (the orchestrator may not always
+ * export the slug per dispatch). Returns true only when a spec is locatable.
+ */
+function devteamSubagentGateCheck(
+  events: TelemetryEvent[],
+  cwd: string,
+): { passed: boolean; reason: string } {
+  // Guard 1 — operator opt-in. Default off.
+  if (process.env["GUILD_ENABLE_DEVTEAM_REFLECT"] !== "1") {
+    return { passed: false, reason: "GUILD_ENABLE_DEVTEAM_REFLECT != 1" };
+  }
+  // Guard 2 — dispatch threshold. Count SubagentStop events with a
+  // non-empty specialist field; trivial work (< 3 dispatches) doesn't
+  // warrant a reflection.
+  const dispatchCount = events.filter(
+    (e) =>
+      e.event === "SubagentStop" &&
+      typeof e.specialist === "string" &&
+      e.specialist.trim().length > 0,
+  ).length;
+  if (dispatchCount < 3) {
+    return {
+      passed: false,
+      reason: `dispatch count ${dispatchCount} < 3`,
+    };
+  }
+  // Guard 3 — spec lookup. Reflections are only meaningful when there's
+  // a written spec to reflect against. GUILD_SPEC_SLUG wins; otherwise
+  // "any spec.md exists" is the conservative fallback.
+  const specDir = path.join(durableGuildDir(resolveGuildRoot(cwd)), "spec");
+  const slug = process.env["GUILD_SPEC_SLUG"];
+  if (slug && slug.trim().length > 0) {
+    const specPath = path.join(specDir, `${slug}.md`);
+    if (!fs.existsSync(specPath)) {
+      return { passed: false, reason: `spec not found: ${specPath}` };
+    }
+  } else {
+    if (!fs.existsSync(specDir)) {
+      return { passed: false, reason: `spec dir not found: ${specDir}` };
+    }
+    let anySpec = false;
+    try {
+      const entries = fs.readdirSync(specDir);
+      anySpec = entries.some((name) => name.endsWith(".md"));
+    } catch {
+      anySpec = false;
+    }
+    if (!anySpec) {
+      return { passed: false, reason: `no *.md spec under ${specDir}` };
+    }
+  }
+  return { passed: true, reason: "all guards met" };
+}
+
+/**
+ * Produce a compact stub summary from events and write it to summary.md.
+ * Used when scripts/trace-summarize.ts is not yet available.
+ */
+function writeStubSummary(runDir: string, runId: string, events: TelemetryEvent[]): void {
+  const specialists = [
+    ...new Set(events.map((e) => e.specialist).filter(Boolean)),
+  ];
+  const tools = [...new Set(events.map((e) => e.tool).filter(Boolean))];
+  const editCount = events.filter(
+    (e) => e.tool === "Write" || e.tool === "Edit"
+  ).length;
+  const totalMs = events.reduce((acc, e) => acc + (e.ms ?? 0), 0);
+
+  const lines = [
+    `# Run summary: ${runId}`,
+    "",
+    `Generated: ${new Date().toISOString()} (stub — trace-summarize.ts not yet available)`,
+    "",
+    "## Specialists dispatched",
+    specialists.length > 0 ? specialists.map((s) => `- ${s}`).join("\n") : "- (none)",
+    "",
+    "## Tool activity",
+    `- Total events: ${events.length}`,
+    `- File edits: ${editCount}`,
+    `- Unique tools: ${tools.join(", ") || "(none)"}`,
+    `- Total duration: ${totalMs}ms`,
+    "",
+    "## Outcome",
+    "Gate passed: specialist dispatched, file edited, no errors.",
+    "",
+    "<!-- fallback summary from maybe-reflect.ts — scripts/trace-summarize.ts was unavailable at this cwd. Install/restore scripts/trace-summarize.ts for the richer summary that guild:reflect prefers. -->",
+  ];
+
+  const summaryPath = path.join(runDir, "summary.md");
+  fs.writeFileSync(summaryPath, lines.join("\n") + "\n", "utf8");
+  process.stderr.write(`[maybe-reflect] wrote fallback summary to ${summaryPath}\n`);
+}
+
+/**
+ * Attempt to run scripts/trace-summarize.ts.
+ * If it exists and succeeds, it writes summary.md itself.
+ * Returns true if the real summarizer ran, false if it's missing (use stub).
+ */
+function tryRealSummarizer(cwd: string, runId: string): boolean {
+  // KTD11: plain `node` on the committed compile output, never `npx tsx`. This is
+  // a Stop / SubagentStop path a real session hits, so an `npx` spawn here could
+  // reach the network on a cold cache inside a hook. The summarizer ships as
+  // runtime/scripts/trace-summarize.js next to this bundle (scripts/compile.ts
+  // target table); the plugin root is where THIS bundle lives, not the cwd being
+  // summarized — the old code looked for the summarizer under the user's repo.
+  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT || path.resolve(__dirname, "..", "..");
+  const summarizerPath = path.join(pluginRoot, "runtime", "scripts", "trace-summarize.js");
+  if (!fs.existsSync(summarizerPath)) return false;
+
+  const result = spawnSync(
+    process.execPath,
+    [summarizerPath, "--run-id", runId, "--cwd", cwd],
+    {
+      cwd,
+      encoding: "utf8",
+      timeout: 15000,
+      env: { ...process.env },
+    }
+  );
+
+  if (result.status !== 0) {
+    process.stderr.write(
+      `[maybe-reflect] trace-summarize exited ${result.status}: ${result.stderr ?? ""}\n`
+    );
+    return false;
+  }
+  return true;
+}
+
+// ── Codex-skip discipline guard (FU-E) ──────────────────────────────────────
+
+/** Consecutive skip count at which the guard hard-fails. Matches the banner. */
+const CODEX_SKIP_THRESHOLD = 3;
+
+/** Non-zero exit code emitted when the threshold is breached. */
+const CODEX_SKIP_EXIT_CODE = 2;
+
+/**
+ * Marker contract — does a reflection record a codex-review skip?
+ *
+ * PRECEDENCE IS THE WHOLE POINT. These sources are NOT peers, and ORing them
+ * is what made this guard unable to tell "ran" from "skipped":
+ *
+ *   1. DECLARATION (authoritative) — an explicit `codex_review:` value, in
+ *      frontmatter or as a `<!-- codex_review: ... -->` body marker. When one
+ *      is present it DECIDES, and nothing below is consulted.
+ *   2. INFERENCE (fallback only) — the legacy proposals list
+ *      `skill_improvement: [..., guild:codex-review, ...]`, read as a hint that
+ *      review was deferred. Applies ONLY to documents carrying no declaration.
+ *
+ * An inference must never overrule a declaration. Before this ordering existed
+ * all three tests were ORed, so a reflection that declared `codex_review: RAN`
+ * was still counted as a skip whenever it ALSO proposed improving the
+ * guild:codex-review skill — i.e. engaging with the review discipline is what
+ * marked you as having evaded it. Three such reflections sat newest-first on
+ * disk, so the streak read 3/3 and the sentinel blocked, while every clearing
+ * path the banner offered was either already satisfied or a no-op. The only
+ * exit left was the operator override, which is how a rail teaches people that
+ * overriding it is routine.
+ *
+ * Unrecognised declared values (neither RAN nor SKIPPED) count as a SKIP. This
+ * guard is a discipline rail, so it fails CLOSED: a spurious block costs one
+ * conversation, a spurious pass ships unreviewed self-build work.
+ */
+function reflectionRecordsCodexSkip(content: string): boolean {
+  // (1) DECLARATION — first explicit value wins (frontmatter sits at the top of
+  //     the document, so the first match is the document's own field rather
+  //     than any later prose that quotes the marker).
+  const declared =
+    content.match(/^[ \t]*codex_review:[ \t]*([A-Za-z][A-Za-z0-9_-]*)[ \t]*$/im) ??
+    content.match(/<!--[ \t]*codex_review:[ \t]*([A-Za-z][A-Za-z0-9_-]*)[ \t]*-->/i);
+  if (declared) return declared[1].toUpperCase() !== "RAN";
+
+  // (2) INFERENCE — legacy skill_improvement list, undeclared documents only.
+  const m = content.match(/skill_improvement:\s*\[([^\]]*)\]/);
+  if (m && m[1].includes("guild:codex-review")) return true;
+  return false;
+}
+
+/**
+ * Count the streak of CONSECUTIVE most-recent reflections (newest first by
+ * mtime) that record a codex-review skip. A reflection that explicitly does
+ * NOT record a skip (i.e. codex review ran) breaks the streak — that is the
+ * honest meaning of "consecutive skips".
+ *
+ * `armed` is true only in self-build context (hooks/lib/self-build.ts's
+ * detectSelfBuild() finds the orientation marker at <root>/AGENTS.md or
+ * <root>/plugin/AGENTS.md). Outside self-build the guard never fires.
+ */
+function evaluateCodexSkipGuard(guildRoot: string): {
+  armed: boolean;
+  streak: number;
+} {
+  try {
+    // Shared predicate (hooks/lib/self-build.ts) — checks <root>/AGENTS.md
+    // (plugin repo root) then <root>/plugin/AGENTS.md (umbrella root). The
+    // banner moved off plugin/CLAUDE.md on 2026-06-21; this is the ONE place
+    // that check lives now (bootstrap.sh mirrors the same marker in bash).
+    const { armed } = detectSelfBuild(guildRoot);
+    if (!armed) return { armed: false, streak: 0 };
+
+    const reflectionsDir = path.join(durableGuildDir(guildRoot), "reflections");
+    if (!fs.existsSync(reflectionsDir)) return { armed: true, streak: 0 };
+
+    const files = fs
+      .readdirSync(reflectionsDir)
+      .filter((f) => f.endsWith(".md"))
+      .map((f) => path.join(reflectionsDir, f))
+      .map((p) => {
+        let mtime = 0;
+        try {
+          mtime = fs.statSync(p).mtimeMs;
+        } catch {
+          mtime = 0;
+        }
+        return { path: p, mtime };
+      })
+      .sort((a, b) => b.mtime - a.mtime);
+
+    let streak = 0;
+    for (const { path: p } of files) {
+      let content = "";
+      try {
+        content = fs.readFileSync(p, "utf8");
+      } catch {
+        // unreadable file breaks the streak (can't confirm a skip)
+        break;
+      }
+      if (reflectionRecordsCodexSkip(content)) {
+        streak += 1;
+      } else {
+        break; // first non-skip reflection ends the consecutive run
+      }
+    }
+    return { armed: true, streak };
+  } catch {
+    // Never let the guard's own failure block the hook.
+    return { armed: false, streak: 0 };
+  }
+}
+
+/**
+ * Remove a stale sentinel once the streak has genuinely dropped below the
+ * threshold.
+ *
+ * Without this the sentinel is WRITE-ONLY, and two of the three clearing paths
+ * the banner prints are structurally incapable of working. Both "run a real
+ * review" and "record a reflection without a SKIPPED marker" act on the STREAK,
+ * which is recomputed from disk every run — but the blocking FILE was never
+ * removed by anything, so `blocked: true` outlived the condition that justified
+ * it and the next G-gate kept refusing. That left deletion (the operator
+ * override) as the only exit that actually worked, which is how a rail teaches
+ * people that overriding it is routine.
+ *
+ * Only ever called in self-build context with streak < threshold, so it cannot
+ * erase a sentinel that is still earning its place.
+ */
+function clearCodexSkipSentinel(guildRoot: string): void {
+  try {
+    const sentinel = path.join(durableGuildDir(guildRoot), "codex-skip-streak.json");
+    if (!fs.existsSync(sentinel)) return;
+    fs.rmSync(sentinel);
+    process.stderr.write(
+      `[maybe-reflect] codex-skip streak broken — cleared stale sentinel: ${sentinel}\n`,
+    );
+  } catch (err) {
+    // Never throw from a Stop hook; a stale sentinel is a visible, recoverable
+    // state, whereas a crash here would take the whole reflection path down.
+    process.stderr.write(
+      `[maybe-reflect] WARN: failed to clear codex-skip sentinel: ${
+        err instanceof Error ? err.message : String(err)
+      }\n`,
+    );
+  }
+}
+
+/**
+ * Persist the blocking sentinel the NEXT G-gate reads. Atomic-ish: a plain
+ * write is fine here (single-writer, idempotent content). The gate refuses
+ * while `blocked: true`.
+ */
+function writeCodexSkipSentinel(guildRoot: string, streak: number): void {
+  try {
+    const guildDir = durableGuildDir(guildRoot);
+    fs.mkdirSync(guildDir, { recursive: true });
+    const sentinel = path.join(guildDir, "codex-skip-streak.json");
+    const data = {
+      schema_version: "guild.codex_skip_streak.v1",
+      streak,
+      threshold: CODEX_SKIP_THRESHOLD,
+      blocked: true,
+      updated_at: new Date().toISOString(),
+      reason:
+        "codex adversarial review skipped on >= 3 consecutive self-build reflections (FU-E)",
+      clear_by:
+        "run guild:codex-review at the next gate, OR record a reflection without a codex_review: SKIPPED marker, OR delete this file after an explicit operator override",
+    };
+    fs.writeFileSync(sentinel, JSON.stringify(data, null, 2) + "\n", "utf8");
+    process.stderr.write(
+      `[maybe-reflect] wrote codex-skip sentinel: ${sentinel}\n`,
+    );
+  } catch (err) {
+    process.stderr.write(
+      `[maybe-reflect] WARN: failed to write codex-skip sentinel: ${
+        err instanceof Error ? err.message : String(err)
+      }\n`,
+    );
+  }
+}
+
+// ── Main ───────────────────────────────────────────────────────────────────
+
+async function main(): Promise<void> {
+  const raw = await readStdin();
+
+  let payload: HookPayload = {};
+  try {
+    payload = JSON.parse(raw.trim()) as HookPayload;
+  } catch {
+    // Invalid JSON is fine — no-op silently
+    process.stderr.write("[maybe-reflect] WARN: invalid JSON on stdin; treating as non-task stop.\n");
+    process.exit(0);
+  }
+
+  // Resolve the repository root first. The reflection writer identity is
+  // resolved later through authorizeHookWrite; no session/sentinel fallback
+  // can select a write target.
+  const cwd = process.env["GUILD_CWD"] ?? payload.cwd ?? process.cwd();
+  // Walk up from cwd to find the repo root — ensures .guild/ always lands at
+  // the nearest .git / .guild ancestor, never in a subdirectory.
+  const guildRoot = resolveGuildRoot(cwd);
+
+  // T10 (KTD23): layout bootstrap on a write-capable entry. A hook can be the
+  // first thing to touch a root after an upgrade landed, so it runs the
+  // bootstrap itself; on a current root this is a stat plus one marker read.
+  // Fail-open by contract — a refused root still exits 0.
+  const layout = ensureStorageLayout(guildRoot, "maybe-reflect");
+  // KTD23 fails CLOSED on a layout this build does not understand: a future
+  // marker means every write below would land in a root that is not ours.
+  if (!layout.ok) {
+    process.stderr.write(`warn: [maybe-reflect] .guild layout refused (${layout.refused}) — no writes\n`);
+    return;
+  }
+
+  // Signal 2 (cross-run): codex-skip discipline guard on self-build runs (FU-E).
+  //
+  // Contract (SessionStart banner): "three consecutive skips trigger a hard
+  // fail at the gate (maybe-reflect.ts checks the reflection trail)."
+  //
+  // A Stop hook fires AFTER the turn — it cannot retroactively fail a gate that
+  // already passed. The honest enforcement a Stop hook CAN deliver is:
+  //   (a) a persisted sentinel (.guild/codex-skip-streak.json) that the NEXT
+  //       G-gate reads and refuses on, and
+  //   (b) a loud stderr DISCIPLINE banner + NON-ZERO exit so the skip is
+  //       impossible to miss in the transcript.
+  // Both fire at the >= 3 consecutive-skip threshold. Below threshold we record
+  // the streak quietly (no sentinel, exit continues normally).
+  //
+  // This guard ONLY arms in self-build context (cwd has plugin/CLAUDE.md with
+  // the orientation banner) so it never disturbs a consuming repo's session.
+  const codexGuard = evaluateCodexSkipGuard(guildRoot);
+  if (codexGuard.armed && codexGuard.streak < CODEX_SKIP_THRESHOLD) {
+    // The streak is genuinely below threshold — retire any sentinel left over
+    // from a previous run, so paths 1 and 2 in the banner below actually clear
+    // the block instead of only claiming to.
+    clearCodexSkipSentinel(guildRoot);
+  }
+  if (codexGuard.armed && codexGuard.streak >= CODEX_SKIP_THRESHOLD) {
+    writeCodexSkipSentinel(guildRoot, codexGuard.streak);
+    process.stderr.write(
+      "\n[maybe-reflect] ⚠⚠⚠ DISCIPLINE HARD-FAIL ⚠⚠⚠\n" +
+      `[maybe-reflect] codex adversarial review has been SKIPPED on ${codexGuard.streak}\n` +
+      "[maybe-reflect] consecutive self-build reflections (>= 3 threshold reached).\n" +
+      "[maybe-reflect] A blocking sentinel was written to:\n" +
+      "[maybe-reflect]   .guild/codex-skip-streak.json  (blocked: true)\n" +
+      "[maybe-reflect] The NEXT G-gate (G-spec/G-plan/G-lane) must REFUSE to pass\n" +
+      "[maybe-reflect] until codex review runs or the streak is cleared. To clear:\n" +
+      "[maybe-reflect]   1. wire codex (`codex --version` + `codex login`, or OPENAI_API_KEY) and run\n" +
+      "[maybe-reflect]      `guild:codex-review` at the gate, OR\n" +
+      "[maybe-reflect]   2. record a reflection WITHOUT a codex_review: SKIPPED marker\n" +
+      "[maybe-reflect]      (a real review breaks the consecutive streak), OR\n" +
+      "[maybe-reflect]   3. delete .guild/codex-skip-streak.json after an explicit\n" +
+      "[maybe-reflect]      operator override.\n" +
+      "[maybe-reflect] See plugin/CLAUDE.md §'Codex adversarial review'.\n\n"
+    );
+    // Non-zero exit is the loudest honest escalation a Stop hook has. It does
+    // NOT run the reflect path — the discipline failure takes precedence over
+    // emitting a reflect marker for this turn.
+    process.exit(CODEX_SKIP_EXIT_CODE);
+  }
+
+  // T3b (session_context §5): the reflect leg reads the run's events AND
+  // writes the fallback run summary under the run dir — a runtime write. Run
+  // identity is the verified binding env ONLY (no sentinel, no session/date
+  // fallback: those were unbound identities a moved sentinel could redirect).
+  // A refused binding skips reflection for this turn (fail closed, exit 0).
+  const reflectAuth = authorizeHookWrite(guildRoot);
+  if (reflectAuth.ok === false) {
+    process.stderr.write(formatBindingRejected("maybe-reflect", reflectAuth));
+    process.exit(0);
+  }
+  const runId = reflectAuth.run_id;
+
+  // Load telemetry events — canonical logs/v1.4-events.jsonl first (HK-04);
+  // fall back to legacy events.ndjson only when canonical is absent.
+  const eventsRunDir = path.join(durableGuildDir(guildRoot), "runs", runId);
+  const canonicalEventsFile = path.join(eventsRunDir, "logs", "v1.4-events.jsonl");
+  const legacyEventsFile = path.join(eventsRunDir, "events.ndjson");
+  const eventsFile = fs.existsSync(canonicalEventsFile) ? canonicalEventsFile : legacyEventsFile;
+  const events = loadEvents(eventsFile);
+
+  // v1.3 — F12: branch on hook_event_name. SubagentStop gets the dev-team
+  // gate (opt-in env var + dispatch threshold + spec presence); Stop gets
+  // the original heuristic gate (specialist + edit + no error).
+  const hookEvent = payload.hook_event_name ?? "Stop";
+
+  if (hookEvent === "SubagentStop") {
+    const result = devteamSubagentGateCheck(events, guildRoot);
+    if (!result.passed) {
+      process.stderr.write(
+        `[maybe-reflect] dev-team gate failed for run ${runId}: ${result.reason} — skipping reflection.\n`,
+      );
+      process.exit(0);
+    }
+    // Dev-team gate passed — fall through to summary + reflect marker.
+  } else {
+    // Stop event — apply the original heuristic gate.
+    if (!gateCheck(events)) {
+      // Gate failed — no-op, no stdout, exit 0
+      process.stderr.write(
+        `[maybe-reflect] gate failed for run ${runId} — skipping reflection.\n`,
+      );
+      process.exit(0);
+    }
+  }
+
+  // Gate passed — produce summary, then tell orchestrator to reflect
+  const runDir = path.join(durableGuildDir(guildRoot), "runs", runId);
+
+  const usedRealSummarizer = tryRealSummarizer(cwd, runId);
+  if (!usedRealSummarizer) {
+    writeStubSummary(runDir, runId, events);
+  }
+
+  // Emit reflect marker to stdout — orchestrator reads this line
+  process.stdout.write(`GUILD_REFLECT run_id=${runId}\n`);
+  process.exit(0);
+}
+
+main().catch((err: unknown) => {
+  process.stderr.write(
+    `[maybe-reflect] FATAL: ${err instanceof Error ? err.message : String(err)}\n`
+  );
+  process.exit(0); // Always exit 0
+});

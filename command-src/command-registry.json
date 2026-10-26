@@ -1,0 +1,251 @@
+{
+  "schema_version": "guild.command.v1",
+  "commands": [
+    {
+      "id": "build",
+      "name": "build",
+      "description": "Development — per lane: assemble the specialist context bundle, dispatch the lane on the backend locked in at intake (snapshot effective.agent_mode), collect the handoff receipt, then run the G-lane review gate. Dispatches to guild:execute-plan.",
+      "argument_hint": "[lane-id]",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "Skill",
+        "AskUserQuestion",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList"
+      ],
+      "body": "\n# /guild:build — Development phase\n\nEach lane is an ephemeral one-agent-per-task cell: spawn at its resolved tier → work →\nemit `guild.handoff.v2` → dismiss; `depends-on:` decides parallelism, `[lane-id]` re-runs one.\n\n## Run recording\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/hooks/dist/run-trace.js\" start --command=/guild:build --phase=build --cwd \"$(pwd)\"\n# append --initiative=<id> ONLY when the user supplied one (NN#5); never auto-detect\n```\n\n## Dispatch\n\n```\nSkill: guild:execute-plan\nargs: $ARGUMENTS\n```\n\nThe lane roster is the per-phase `.guild/team/<slug>.<phase>.yaml`. Context assembly,\nthe G-lane gate, receipts under `.guild/runs/<run-id>/handoffs/` and the autonomy\npolicy are the assembler's.\n\n## Team decision gate (blocking)\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/team-decide.js\" gate --proposal <proposal> --cwd \"$(pwd)\"\n```\n\nVerbs: approve · restructure · add · remove · substitute · edit_dependencies.\nSTOP on a non-zero exit — exit 3 BLOCKS (no persisted decision, a restructure rather\nthan an approval, a stale or tampered trail).\n`--auto-approve` does not cover team approval: never auto-approve a team decision.\n"
+    },
+    {
+      "id": "config",
+      "name": "config",
+      "description": "Project config surface — resolve, render, validate and edit .guild/ policy config, pin per-run roles, detect providers, re-pin MCP hashes, and reconcile against the typed schema. Sub-verbs `models` (READ-ONLY session-binding evidence) and `migrate` (v1->v2 layout inspect / dry-run / retry) route to their own CLIs, not to config-cmd.",
+      "argument_hint": "<init|set|role|show|validate|providers|ui|update-mcp-hashes|reconcile> [options] | models inspect [--run-id <id>] [--json] [--cwd <path>] | migrate [--root=<path>] [--mode=migrate|dry-run|skip|verify] [--recheck] [--workspace] [--accept-grades]",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Bash"
+      ],
+      "body": "\n# /guild:config — policy config\n\nDurable config is policy only: it never stores a host family or a concrete model id\n(KTD22). Route on the FIRST token; `$REMAINING_ARGS` is every token after it, consumed\nexactly once. `config-cmd.js` has no `init` and rejects `models` / `migrate`.\n\n```bash\n# set|role|show|validate|providers|ui|update-mcp-hashes|reconcile — forwarded verbatim\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/config-cmd.js\" $ARGUMENTS --cwd \"$(pwd)\"\n# init — the CLI spells it `reconcile sync` (never-clobber); translate, do not forward\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/config-cmd.js\" reconcile sync --cwd \"$(pwd)\" $REMAINING_ARGS\n# models — $REMAINING_ARGS ALREADY starts with the CLI's sub-verb; never insert another. The CLI defaults --cwd to $PWD, so a user --cwd is never overridden.\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/models-cmd.js\" $REMAINING_ARGS\n# migrate — v1->v2 layout inspect / dry-run / retry (dry-run is the default)\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/migrate-guild.js\" --root=\"$(pwd)\" $REMAINING_ARGS\n```\n\n| Sub-verb | Grammar |\n|---|---|\n| `models` | READ-ONLY routing evidence — `models inspect [--run-id <id>] [--json] [--cwd <path>]` |\n| `migrate` | `migrate [--root=<path>] [--mode=migrate|dry-run|skip|verify] [--recheck] [--workspace] [--accept-grades]` |\n\nA danger key needs `--confirm`; `show --sources` annotates inheritance and\n`show --render` fails closed on a secret leak. No sub-verb prints the accepted list.\n\n## Dispatch\n\n```\nSkill: guild:using-guild\nargs: $ARGUMENTS\n```\n\nThe CLIs above own every write; the assembler explains which knob applies here.\n"
+    },
+    {
+      "id": "guild",
+      "name": "guild",
+      "description": "Bare Guild entry (T0) — no verb runs six-way intake; `research` / `debug` / `--class=` bind the workflow class directly. Surfaces the proposed phase and class for confirmation, never silently. Dispatches to guild:using-guild.",
+      "argument_hint": "[brief] [research|debug] [--class=product|research|debug|ops|init] [--rigor=quick|standard|deep] [--auto-approve[=spec,plan,build,qa,all]] [--review=local|cross|off] [--initiative=<id>|new]",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "Skill",
+        "AskUserQuestion",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList"
+      ],
+      "body": "\n# /guild:guild — T0 orchestrator session\n\nBare entry (KTD46): no verb runs intake and the classifier's `intake` decides;\n`research`, `debug` and `--class=<product|research|debug|ops|init>` bind the class\nas arguments to that same entry (KTD69) — never as command files of their own.\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/hooks/dist/run-trace.js\" start --command=/guild:guild --phase=<detected-phase> --cwd \"$(pwd)\"\n# append --initiative=<id> ONLY when the user supplied one (NN#5); never auto-detect\necho \"$ARGUMENTS\" | node \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/classify-intake.js\"\n```\n\n## Dispatch\n\n```\nSkill: guild:using-guild\nargs: $ARGUMENTS\n```\n\nIntake, phase detection, gates and every `.guild/` write live in the\nassembler and the class graph it binds.\n\n## Team decision gate (blocking)\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/team-decide.js\" gate --proposal <proposal> --cwd \"$(pwd)\"\n```\n\nVerbs: approve · restructure · add · remove · substitute · edit_dependencies.\nSTOP on a non-zero exit — exit 3 BLOCKS (no persisted decision, a restructure rather\nthan an approval, a stale or tampered trail).\n`--auto-approve` does not cover team approval: never auto-approve a team decision.\n"
+    },
+    {
+      "id": "ideate",
+      "name": "ideate",
+      "description": "Ideation — Socratic spec; the L1 clarify loop runs whenever the resolved loops include spec (default --rigor=standard and deep; quick skips it). Dispatches to guild:brainstorm.",
+      "argument_hint": "[brief] [--skip]",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "Skill",
+        "AskUserQuestion",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList"
+      ],
+      "body": "\n# /guild:ideate — Ideation phase\n\nTurns a vague brief into an approved `.guild/spec/<slug>.md`. `--skip` validates\na supplied spec and flags gaps instead of asking the full question set.\n\n## Run recording\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/hooks/dist/run-trace.js\" start --command=/guild:ideate --phase=ideate --cwd \"$(pwd)\"\n# append --initiative=<id> ONLY when the user supplied one (NN#5); never auto-detect\n```\n\n## Dispatch\n\n```\nSkill: guild:brainstorm\nargs: $ARGUMENTS\n```\n\nThe assembler runs its `loop-clarify` chapter when the resolved loops include\n`spec`. Spec approval **I**; gates, question set and `.guild/` writes are the\nassembler's.\n\n## Team decision gate (blocking)\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/team-decide.js\" gate --proposal <proposal> --cwd \"$(pwd)\"\n```\n\nVerbs: approve · restructure · add · remove · substitute · edit_dependencies.\nSTOP on a non-zero exit — exit 3 BLOCKS (no persisted decision, a restructure rather\nthan an approval, a stale or tampered trail).\n`--auto-approve` does not cover team approval: never auto-approve a team decision.\n"
+    },
+    {
+      "id": "init",
+      "name": "init",
+      "description": "Init — onboard an existing repo or scaffold new-product knowledge; builds wiki + (brownfield) cheap-scan CodebaseMap + architecture-map stub (cheap by default). The full learn-* pipeline runs only under --learn or defaults.auto_learn (D3). Sub-verb `adopt` localizes shipped capability into this project. Dispatches to guild:init.",
+      "argument_hint": "[--learn] [--new] | adopt <report|catalog|adopt|rollback|status|window|g5> [options]",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "Skill",
+        "AskUserQuestion",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList"
+      ],
+      "body": "\n# /guild:init — Init phase\n\nCheap by default: wiki + brownfield cheap-scan map + a confidence-tagged\narchitecture-map stub; `--learn` (or `defaults.auto_learn`) folds in the full\n`learn-*` pipeline. Sub-verb `adopt` localizes shipped capability — `report`,\n`status` and an unfrozen `catalog` read-only, the rest ask first.\n\n## Run recording\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/hooks/dist/run-trace.js\" start --command=/guild:init --phase=init --cwd \"$(pwd)\"\n# append --initiative=<id> ONLY when the user supplied one (NN#5); never auto-detect\n# sub-verb `adopt` — capability localization, forwarded verbatim\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/capability-adopt.js\" $REMAINING_ARGS --project-root \"$(pwd)\"\n```\n\n## Dispatch\n\n```\nSkill: guild:init\nargs: $ARGUMENTS\n```\n\n## Team decision gate (blocking)\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/team-decide.js\" gate --proposal <proposal> --cwd \"$(pwd)\"\n```\n\nVerbs: approve · restructure · add · remove · substitute · edit_dependencies.\nSTOP on a non-zero exit — exit 3 BLOCKS (no persisted decision, a restructure rather\nthan an approval, a stale or tampered trail).\n`--auto-approve` does not cover team approval: never auto-approve a team decision.\n"
+    },
+    {
+      "id": "initiative",
+      "name": "initiative",
+      "description": "Durable work — opt-in noun with sub-verbs new|status|list|resume|update|archive|restore|close. A one-off /guild run never creates an initiative; attachment is explicit only. Dispatches to guild:initiative.",
+      "argument_hint": "new|status|list|resume|update|archive|restore|close [id] [--add-goal \"…\"] [--archived]",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "Skill",
+        "AskUserQuestion"
+      ],
+      "body": "\n# /guild:initiative — durable work\n\nThe first token is the sub-verb; the assembler implements all eight, applies each\none's default gate, and owns every `.guild/initiatives/**` read and write. An\nunknown sub-verb prints usage and invokes nothing.\n\n`close` runs the deterministic D8 close gate and refuses to close on a non-zero\nexit — including any cited `close_gate.evidence` or work-item `evidence_refs`\npath that does not exist.\n\n## Dispatch\n\n```\nSkill: guild:initiative\nargs: $ARGUMENTS\n```\n"
+    },
+    {
+      "id": "learn",
+      "name": "learn",
+      "description": "Understand-everything — no sub-verb runs the smart full learn-all (detect target, run the pipeline, update indexes, emit knowledge candidates). Sub-verbs map | graph | knowledge | onboard | diff | explain | harvest scope it. Dispatches to guild:learn.",
+      "argument_hint": "[map|graph|knowledge|onboard|diff|explain|harvest] [target] [--rigor=quick|standard|deep]",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "Skill",
+        "AskUserQuestion"
+      ],
+      "body": "\n# /guild:learn — knowledge pipeline\n\nOne implementation, two triggers (D3): the same `learn-*` chapters run here and\nunder `/guild:init --learn`. Unknown sub-verb: print usage, invoke no skill.\n\n## Run recording\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/hooks/dist/run-trace.js\" start --command=/guild:learn --cwd \"$(pwd)\"\n```\n\n## Sub-verbs\n\n| Token | Scope |\n|---|---|\n| (none) | smart full learn-all — detect, confirm, run the pipeline |\n| `map` | CodebaseMap + architecture overview (cheap scan) |\n| `graph` | deep semantic KnowledgeGraph (slow) |\n| `knowledge` | deep multi-modal knowledge tier |\n| `onboard` | guided architecture tour |\n| `diff` | change analysis + blast radius |\n| `explain` | file / module / concept deep-dive |\n| `harvest` | phase/run artifact extraction |\n\n## Dispatch\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/learn-route.js\" --cwd \"$(pwd)\" -- $ARGUMENTS\n```\n\nThe route JSON decides, never prose. `route: usage` → print its `usage` and stop;\nany other route → `Skill: guild:learn` with `args: $ARGUMENTS` and the route JSON.\nEvery `.guild/` write is the assembler's.\n"
+    },
+    {
+      "id": "maintain",
+      "name": "maintain",
+      "description": "Self-heal + RSI — sub-verbs evolve | rollback | audit | fix | gc | wiki revert | analyze. ONE assembler: every sub-verb dispatches guild:evolve, which routes the token to its own chapter (`guild:evolve §Sub-verbs`). One gate, two homes: project targets write this repo's .guild/, machinery targets write a candidate a human commits.",
+      "argument_hint": "<evolve <id> [--target=<type>] [--auto] | rollback <skill> [n] | audit | fix [run-id|symptom] | gc | wiki revert | analyze <run|compare|initiative|independent|inspect|recommendation> ...>",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "Skill",
+        "AskUserQuestion"
+      ],
+      "body": "\n# /guild:maintain — self-maintenance\n\nOne entry, one assembler. `$ARGUMENTS` is forwarded VERBATIM — the sub-verb token is the assembler's to read, never re-inserted here. An unknown sub-verb prints usage.\n\n## Run recording\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/hooks/dist/run-trace.js\" start --command=/guild:maintain --cwd \"$(pwd)\"\n```\n\n## Sub-verbs (routed by `guild:evolve §Sub-verbs`)\n\n| Token | Chapter the assembler loads |\n|---|---|\n| `evolve <id> [--target=<type>] [--auto]` | `references/evolve-targets.md` — target enum + the two homes |\n| `rollback <skill> [n]` | `references/rollback-skill.md` — restore the inverse span |\n| `audit` | `references/audit.md` — static script + boundary audit |\n| `fix [run-id\\|symptom]` | `../diagnose/references/systematic-debug.md` |\n| `wiki revert` | `references/wiki-revert.md` — the harvest-journal inverse |\n| `analyze <run\\|compare\\|initiative\\|independent\\|inspect\\|recommendation> ...` | `references/run-analysis.md` — compiled run-analysis CLI (C-CLI argv, read vs gated writes) |\n| `gc` | durable-state sweep + scratch janitor (storage domain, U-STOR) |\n\n## Dispatch\n\n```\nSkill: guild:evolve\nargs: $ARGUMENTS\n```\n\n`--target=<type>` names one of the eleven evolve targets; omitted, the assembler infers\nit. `--auto` runs unattended and is the cheap curator only: it carries `playbook` and\n`skill`, and fails closed with `next_need: operator` on everything else. Machinery\ntargets never write the install tree — they write a candidate a human commits.\n"
+    },
+    {
+      "id": "ops",
+      "name": "ops",
+      "description": "Operations — five runbook classes (release / monitoring / incident / rollback / maintenance) selected by the positional [runbook] or surfaced detection, each behind a mandatory pre-flight dry-run. Dispatches to guild:operations.",
+      "argument_hint": "[runbook]",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "Skill",
+        "AskUserQuestion",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList"
+      ],
+      "body": "\n# /guild:ops — Operations phase\n\nFour safety rails the assembler never drops: incident and rollback are never\nautonomous, the first run is always interactive, always-ask is unconditional, and\nthe pre-flight dry-run is mandatory.\n\n## Run recording\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/hooks/dist/run-trace.js\" start --command=/guild:ops --phase=ops --cwd \"$(pwd)\"\n# append --initiative=<id> ONLY when the user supplied one (NN#5); never auto-detect\n```\n\n## Dispatch\n\n```\nSkill: guild:operations\nargs: $ARGUMENTS\n```\n\nRisky or destructive steps prompt **I always**. Runbooks, evidence and\n`.guild/` writes live in the assembler and its L3 runbook chapters.\n\n## Team decision gate (blocking)\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/team-decide.js\" gate --proposal <proposal> --cwd \"$(pwd)\"\n```\n\nVerbs: approve · restructure · add · remove · substitute · edit_dependencies.\nSTOP on a non-zero exit — exit 3 BLOCKS (no persisted decision, a restructure rather\nthan an approval, a stale or tampered trail).\n`--auto-approve` does not cover team approval: never auto-approve a team decision.\n"
+    },
+    {
+      "id": "plan",
+      "name": "plan",
+      "description": "Planning — team compose + PRD + per-specialist lane plan + autonomy contract. Backend (agent_mode/tmux) is resolved once at intake from the run-start preflight snapshot, not per-phase. Sub-verb `goal` emits P.O.V.E.R. goals / task groups from the approved spec. Dispatches to guild:plan.",
+      "argument_hint": "[--team-size=N] | goal [new|list|show|from-spec] [slug]",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "Skill",
+        "AskUserQuestion",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList"
+      ],
+      "body": "\n# /guild:plan — Planning phase\n\nOne spec in; `guild:plan` runs `guild:team-compose` first (its own gate), then writes\n`.guild/team/<slug>.<phase>.yaml`, the lane plan and the PRD.\n\n## Run recording\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/hooks/dist/run-trace.js\" start --command=/guild:plan --phase=plan --cwd \"$(pwd)\"\n# append --initiative=<id> ONLY when the user supplied one (NN#5); never auto-detect\n```\n\n`goal [new|list|show|from-spec] [slug]` is a sub-verb of this command: it emits\n`guild.goal.v1` (or `guild.task_group.v1` on a host with no goal surface) from the\napproved spec, keeping ids traceable downstream. It routes through `guild:plan §Sub-verbs`.\n\n## Dispatch\n\n```\nSkill: guild:plan\nargs: $ARGUMENTS\n```\n\n## Team decision gate (blocking)\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/team-decide.js\" gate --proposal <proposal> --cwd \"$(pwd)\"\n```\n\nVerbs: approve · restructure · add · remove · substitute · edit_dependencies.\nSTOP on a non-zero exit — exit 3 BLOCKS (no persisted decision, a restructure rather\nthan an approval, a stale or tampered trail).\n`--auto-approve` does not cover team approval: never auto-approve a team decision.\n"
+    },
+    {
+      "id": "qa",
+      "name": "qa",
+      "description": "Quality — the one user-facing review gate: SignalScan, a surfaced selection matrix, checks under the run sandbox and budget, then the computed ReleaseGate recommendation. Opt-in phase; never auto-entered, never silently skipped. Dispatches to guild:quality.",
+      "argument_hint": "[run-id]",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "Skill",
+        "AskUserQuestion",
+        "TaskCreate",
+        "TaskUpdate",
+        "TaskList"
+      ],
+      "body": "\n# /guild:qa — Quality phase\n\nRuns *after* a passing `.guild/runs/<run-id>/verify.md`, never instead of it. No\npassing verify for the run ⇒ route back to Development and say so; proceeding\nanyway is an operator decision recorded in the quality report.\n\n## Run recording\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/hooks/dist/run-trace.js\" start --command=/guild:qa --phase=qa --cwd \"$(pwd)\"\n# append --initiative=<id> ONLY when the user supplied one (NN#5); never auto-detect\n```\n\n## Dispatch\n\n```\nSkill: guild:quality\nargs: $ARGUMENTS\n```\n\nRelease / blocker gate **I** — a BLOCK override stays human-gated even under\n`--auto-approve=all`. Checks, evidence and `.guild/` writes are the assembler's.\n\n## Team decision gate (blocking)\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/team-decide.js\" gate --proposal <proposal> --cwd \"$(pwd)\"\n```\n\nVerbs: approve · restructure · add · remove · substitute · edit_dependencies.\nSTOP on a non-zero exit — exit 3 BLOCKS (no persisted decision, a restructure rather\nthan an approval, a stale or tampered trail).\n`--auto-approve` does not cover team approval: never auto-approve a team decision.\n"
+    },
+    {
+      "id": "status",
+      "name": "status",
+      "description": "Orchestrator read — current run state, furthest phase, next gate, blockers, layout version, and the per-phase active team. Sub-verbs `resume` (continue from the next pending gate), `stats` (telemetry dashboard) and `dashboard` (launch the benchmark UI). Read-only except where `resume` advances the run.",
+      "argument_hint": "[--no-index] | resume [--restart] | stats [--rebuild-index] | dashboard [--port N] [--stop]",
+      "allowed_tools": [
+        "Read",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Skill",
+        "AskUserQuestion"
+      ],
+      "body": "\n# /guild:status — where am I\n\nResolves run state by filesystem scan, or the optional SQLite read-through cache on platform\nstate (off the repo) unless `--no-index`. Bare status writes nothing without `.guild/`; with it,\nonly a lightweight run under `.guild/runs/` (`record_status_runs: false` turns that off).\n\n```bash\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/hooks/dist/run-trace.js\" status --cwd \"$(pwd)\"\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/capability-profile.js\" candidates --cwd \"$(pwd)\"\n# sub-verbs, flags forwarded verbatim:\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/resume-lanes.js\" <runDir> --json      $REMAINING_ARGS\nnode \"${GUILD_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-$HOME/.local/share/guild/dist/claude-code}}/runtime/scripts/dashboard-launch.js\" $REMAINING_ARGS\n```\n\n## Sub-verbs\n\n| Token | Scope |\n|---|---|\n| `resume` | continue the active run from the next pending gate; `--restart` clears run state after confirming |\n| `stats` | usage + telemetry dashboard over `.guild/runs/**`; pure read |\n| `dashboard` | clone / serve the benchmark UI over this project's runs + knowledge |\n\nThe active team resolves through `resolveTeamFile`; a legacy `team.yaml` is surfaced once, never acted on.\n\n## Dispatch\n\n```\nSkill: guild:using-guild\nargs: $ARGUMENTS\n```\n\nRead-only: the assembler names the phase and next gate, the CLIs produce the state,\nand `resume` hands off to that phase's own command.\n"
+    },
+    {
+      "id": "wiki",
+      "name": "wiki",
+      "description": "Wiki operations — ingest a source, query the wiki, or run the health lint. An unknown sub-verb prints usage and invokes nothing. Dispatches to guild:wiki.",
+      "argument_hint": "ingest <path> | query \"<text>\" [--category|--owner|--confidence|--updated-since|--tag] | lint",
+      "allowed_tools": [
+        "Read",
+        "Write",
+        "Edit",
+        "Grep",
+        "Glob",
+        "Bash",
+        "Agent",
+        "Skill",
+        "AskUserQuestion"
+      ],
+      "body": "\n# /guild:wiki — project knowledge\n\nIngest stays human-gated: a source becomes a candidate, and only the gate lands it.\nHarvest is the only automatic wiki writer (`wiki.autopromote`, default on; `false`\nkeeps this root candidates-only). Ingested blobs live in `.guild/knowledge/sources/`.\n\n## Sub-verbs\n\n| Token | Scope |\n|---|---|\n| `ingest <path>` | ingest a URL or local file as a sourced candidate |\n| `query \"<text>\"` | BM25 search with the optional filter flags; `recall.backend: hybrid` adds a cache-only rerank that fails open to BM25 |\n| `lint` | wiki health linter |\n\n## Dispatch\n\n```\nSkill: guild:wiki\nargs: $ARGUMENTS\n```\n\nThe first token selects the chapter; the rest forwards as `args`. Every wiki\nwrite is the assembler's, behind its own gate.\n"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "guild-telemetry",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Optional Guild MCP server: structured trace query over .guild/runs/ (per guild-plan.md §13.3).",
+  "type": "commonjs",
+  "scripts": {
+    "test": "cd ../.. && bun test --isolate mcp-servers/guild-telemetry",
+    "build": "cd ../.. && bun scripts/compile.ts --only=mcp"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "js-yaml": "^4.3.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.0.0",
+    "esbuild": "0.28.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.5.0"
+  }
+}

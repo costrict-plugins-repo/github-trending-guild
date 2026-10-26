@@ -1,0 +1,366 @@
+/**
+ * tests/universal-host/p2-w1-sc9-no-regression.test.ts
+ *
+ * SC-W1-9 — no unintended default-path change. The full scripts/ + tests/ suites green
+ * in-band is the primary gate; this file adds the FALSIFIABLE A/B determinism checks that
+ * pin the new P2-W1 pure surfaces (additive, no clock/random) so a nondeterminism or
+ * silent default-shape drift fails fast. The ONE allowlisted intentional re-baseline is the
+ * config-schema-extension golden (LW1-9-signed) — NOT these.
+ */
+import { describe, it, expect } from "bun:test";
+import * as path from "node:path";
+import { execFileSync } from "node:child_process";
+import { classifyIntake } from "../../scripts/lib/classify-intake";
+import { validateExploreV1, EXPLORE_V1_EXAMPLE } from "../../scripts/lib/explore-schema";
+import { validateDefineV1, DEFINE_V1_EXAMPLE } from "../../scripts/lib/define-schema";
+
+describe("SC-W1-9 — additive pure surfaces are deterministic (A/B)", () => {
+  it("classifyIntake: same prompt ⇒ byte-identical result", () => {
+    const p = "I have an idea for an app that helps neighbors share tools";
+    expect(JSON.stringify(classifyIntake(p))).toBe(JSON.stringify(classifyIntake(p)));
+  });
+
+  it("validators: stable verdict on the producer examples (no drift)", () => {
+    expect(validateExploreV1(EXPLORE_V1_EXAMPLE).valid).toBe(true);
+    expect(validateDefineV1(DEFINE_V1_EXAMPLE).valid).toBe(true);
+  });
+
+  it("the intake tuning preserved the five over-fire NEGATIVES (precision floor held)", () => {
+    const overfire = [
+      "What if we built an endpoint that creates invoices?",
+      "I want to create a script that migrates users to the new table",
+      "Thinking about a small script to rotate old logs",
+      "What if we made a hook that validates receipts?",
+      "I would like to build a tool for debugging flaky tests",
+    ];
+    for (const p of overfire) expect(classifyIntake(p).intake).toBe("other");
+  });
+});
+
+// ── SC-W1-9 named A/B over the command / hook / package entry paths (FIX 3) ──────
+//
+// R4: prove this wave did NOT silently change a default-output entry path. The A/B is
+// worktree-vs-HEAD (git is the A=committed / B=working-tree comparator) over the
+// command / hook / package surfaces; the changed set MUST be a subset of an EXPLICIT
+// allowlist. The ONE intentional default-output delta this wave is the config-schema-
+// extension scaffold, which lives under the CONFIG path (scripts/lib/config-schema.ts +
+// the re-baselined tests/.../config-init-baseline.json) and is byte-pinned separately by
+// scripts/lib/config-reconcile.test.ts (`scaffold() === config-init-baseline.json`).
+// So the command/hook/package allowlist is EMPTY — those entry paths must be byte-identical.
+const PLUGIN_ROOT = path.resolve(__dirname, "../..");
+const ENTRY_PATHS = ["commands", "hooks", ".claude-plugin"];
+// Intentional new/changed entrypoints permitted under the three paths above.
+//
+// HOST-ADAPTER RECONCILE (run-host-adapter-reconcile-20260621, lane HA-2): the landed
+// host-adapter migration (R0–R13) legitimately changed `hooks/**` entry-path files. Each
+// delta below was verified (git diff HEAD) to be that intended migration work — additive,
+// coherent, no behavior deletions/corruption — NOT a regression:
+//   - hooks/lib/guild-hook-event.ts ....... GuildHostKind extended to the 9-host roster +
+//                                           new pi/antigravity/app/connector emitters.
+//   - hooks/lib/run-state.ts .............. R5 host-native model-params (LaneModelParams).
+//   - hooks/dist/{run-trace,run-trace-start,run-trace-close,learning-backstop}.js
+//                                           recompiled bundles embedding the above.
+//   - hooks/lib/__tests__/run-state.test.ts ......... covers the R5 host modelParams block.
+//   - hooks/lib/__tests__/guild-hook-event.test.ts .. (new) covers the new host emitters.
+//   - hooks/__tests__/using-guild-bootstrap.test.ts + hooks/__tests__/golden/
+//     using-guild-session-start.json ...... golden regenerated from current using-guild
+//                                           source (product-loop intake section); the test
+//                                           re-asserts golden===source, so the delta is
+//                                           intentional and pinned, not silent drift.
+// MODULE REORG (run-plugin-module-reorg-20260621): the additive src/modules
+// migration moved the shared frontmatter/YAML reader behind src/modules/state and
+// the package-local YAML resolver behind src/modules/kernel. `task-completed.js`
+// is rebuilt from the same hook source, but the bundle shape legitimately changes
+// to use the module runtime resolver. scripts/lib/claude-host-adapter.test.ts
+// probes generated Claude hook execution from the installed package layout, so
+// this is an explicit, tested re-baseline rather than silent entrypoint drift.
+// The allowlist stays EXPLICIT (named files, never a wildcard) so any OTHER entry-path
+// change still fails the A/B guard below — anti-vacuity preserved. After the lead commits
+// these files HEAD advances, the diff empties, and these entries become harmless no-ops.
+//
+// rf-wi-01 (v23x-deferred-followups G1): registered `defaults.lean_lead.*`,
+// `defaults.lifecycle_gate.*`, and `host_mode` in the canonical config schema
+// (config-defaults.ts DEFAULTS — the single source config-schema.ts's CONFIG_SCHEMA
+// derives from). The two guard hooks that ALREADY tolerantly read
+// `defaults.lean_lead`/`defaults.lifecycle_gate` (they now source their fallback
+// default from CONFIG_DEFAULTS instead of a duplicated hardcoded literal) are
+// rebuilt, and every other hooks/dist bundle that transitively embeds the shared
+// config-defaults tree (maybe-reflect, update-check, the agent-team dispatch hooks)
+// picks up the same additive default-tree growth on rebuild — verified (git diff HEAD)
+// to be exactly this schema addition, no behavior deletions/corruption:
+//   - hooks/lib/lean-lead-guard.ts / hooks/dist/lean-lead-guard.js ... schema-anchored
+//     DEFAULT_THRESHOLD/DEFAULT_ENABLED (was a local hardcoded literal).
+//   - hooks/lib/lifecycle-gate.ts / hooks/dist/lifecycle-gate.js ..... same, for
+//     DEFAULT_ADHOC_THRESHOLD/DEFAULT_LIFECYCLE_GATE_ENABLED.
+//   - hooks/dist/maybe-reflect.js, hooks/dist/update-check.js,
+//     hooks/agent-team/dist/{task-created,teammate-idle}.js ........... recompiled
+//     bundles embedding the additive config-defaults.ts DEFAULTS tree (host_mode +
+//     defaults.lean_lead + defaults.lifecycle_gate) — no other behavior change.
+const ENTRY_ALLOWLIST = new Set<string>([
+  // T12 (domain fold, KTD36): these hook entrypoints and shims changed ONE line each —
+  // the re-export specifier now names the domain home (src/domains/<id>/) instead of the
+  // retired src/modules/<id>/workflows/ path. Verified with `git diff HEAD`: import
+  // specifier only, no behaviour edit. hooks/dist/emit-learning-checkpoint.js is the
+  // recompile of that change.
+  "hooks/dist/emit-learning-checkpoint.js",
+  "hooks/gate-outcome-writer.ts",
+  "hooks/lib/handoff-v2.ts",
+  "hooks/lib/reanchor.ts",
+  "hooks/lib/security/config.ts",
+  "hooks/lib/security/events.ts",
+  "hooks/lib/security/scrubbed-write.ts",
+  "hooks/lib/security/secrets.ts",
+  "hooks/lib/tier-dispatch.ts",
+  "hooks/lib/trace-v2.ts",
+  "hooks/lib/v1.4/log-jsonl-schema.ts",
+  "hooks/lib/v1.4/log-jsonl-sidecar.ts",
+  "hooks/lib/v1.4/log-jsonl-writer.ts",
+  "hooks/lib/v1.4/log-jsonl.ts",
+  "hooks/lib/v1.4/redact-log.ts",
+  "hooks/lib/v1.4/v1.4-lock.ts",
+  "hooks/update-check.ts",
+  "hooks/lib/guild-hook-event.ts",
+  "hooks/lib/run-state.ts",
+  "hooks/dist/run-trace.js",
+  "hooks/dist/run-trace-start.js",
+  "hooks/dist/run-trace-close.js",
+  "hooks/dist/learning-backstop.js",
+  "hooks/agent-team/dist/task-completed.js",
+  "hooks/lib/__tests__/run-state.test.ts",
+  "hooks/lib/__tests__/guild-hook-event.test.ts",
+  "hooks/__tests__/using-guild-bootstrap.test.ts",
+  "hooks/__tests__/golden/using-guild-session-start.json",
+  // rf-wi-01 (G1) — see doc comment above.
+  "hooks/lib/lean-lead-guard.ts",
+  "hooks/lib/lifecycle-gate.ts",
+  "hooks/dist/lean-lead-guard.js",
+  "hooks/dist/lifecycle-gate.js",
+  "hooks/dist/maybe-reflect.js",
+  "hooks/dist/update-check.js",
+  "hooks/agent-team/dist/task-created.js",
+  "hooks/agent-team/dist/teammate-idle.js",
+  // rf-wi-01 (G1) codex-review round-1 fix: settings.local.json layering tests.
+  "hooks/lib/__tests__/lean-lead-guard.test.ts",
+  "hooks/lib/__tests__/lifecycle-gate.test.ts",
+  // rf-wi-06 (issue #91) — the direct D5 subagent rung now stamps the line-1
+  // producer marker (guild:execute-plan SKILL.md steps (2b)/(2c)), so the LAST
+  // unmarked dispatch class is gone and the class-gated legacy 300-char
+  // producer-head parse is DELETED from the attribution resolver. Identity is
+  // read from producer-owned positions only (dispatch env + prompt line 1).
+  // The two dist bundles are recompiles of that one source change; the three
+  // test files re-express the (b)/(c) unmarked-rung fixtures in the now-marked
+  // shape and add the "legacy text is inert" properties the deletion adds.
+  "hooks/lib/dispatch-attribution.ts",
+  "hooks/dist/pre-tool-use.js",
+  "hooks/dist/post-tool-use.js",
+  "hooks/__tests__/dispatch-attribution.test.ts",
+  "hooks/__tests__/pre-tool-use-dispatch-guard.test.ts",
+  "hooks/lib/__tests__/backend-degradation.test.ts",
+  // #93 — promoting the backend-degradation guard's strict rung from the
+  // GUILD_BLOCK_UNMARKED_LANES env flag to the registered config key
+  // `defaults.dispatch.block_unmarked_lanes`. Same shape as rf-wi-01 above: a
+  // guard + its one call site, plus the esbuild bundles that transitively carry
+  // the canonical DEFAULTS tree the guard now sources its fallback from.
+  "hooks/lib/backend-degradation.ts",
+  "hooks/pre-tool-use.ts",
+  "hooks/lib/__tests__/block-unmarked-lanes-config.test.ts",
+  // The #56 guard's REAL-hook-path suite, extended with the #93 config-driven
+  // deny/allow cases (codex round-1 P2: the unit tests proved the resolution
+  // rules but nothing proved the hook wired them to a decision).
+  "hooks/__tests__/pre-tool-use-backend-guard.test.ts",
+  "hooks/dist/pre-compact.js",
+  "hooks/dist/gate-outcome-writer.js",
+  "hooks/dist/session-reanchor.js",
+  // full-implementation-convergence landing (run-6f94bea1 FIC-51/A7, 2026-08-17):
+  // the A6C-accepted convergence delta's entry-path files, enumerated EXPLICITLY
+  // (named files, never a wildcard) from `git diff --name-status HEAD` + the
+  // untracked porcelain over commands/hooks/.claude-plugin on the settled tree.
+  // Command + manifest surface (both also re-ratified in live-surface-anchor.ts
+  // in this same commit — see its dated 2026-08-17 note for intent/reachability):
+  ".claude-plugin/plugin.json", // exactly one line: commands[] gains ./commands/adopt.md
+  "commands/adopt.md", // NEW /guild:adopt page — closes the filed capability-adopt gap
+  "commands/initiative.md", // D8 close-gate: evidence/evidence_refs existence check prose
+  // Hook sources + their recompiled esbuild bundles (scratch parity 21/21
+  // byte-identical was verified BEFORE the pins were computed):
+  "hooks/agent-team/task-completed.ts",
+  "hooks/agent-team/teammate-idle.ts",
+  "hooks/bootstrap.sh",
+  "hooks/capture-telemetry.ts",
+  "hooks/dist/capture-telemetry.js",
+  "hooks/dist/comms-format-lint.js",
+  "hooks/lib/run-trace.ts",
+  "hooks/lib/compatibility-skill-guard.ts",
+  "hooks/maybe-reflect.ts",
+  "hooks/post-tool-use.ts",
+  "hooks/run-trace-close.ts",
+  // Hook test files carrying the convergence suites' new/updated coverage:
+  "hooks/__tests__/bundle-cli-leak.test.ts",
+  "hooks/__tests__/capture-telemetry-v14.test.ts",
+  "hooks/__tests__/check-skill-coverage.test.ts",
+  "hooks/__tests__/dist-binding-probes.test.ts",
+  "hooks/__tests__/hook-output-budget.test.ts",
+  "hooks/__tests__/post-tool-use-attribution.test.ts",
+  "hooks/__tests__/post-tool-use-scrub.test.ts",
+  "hooks/__tests__/pre-tool-use-compatibility-skill.test.ts",
+  "hooks/__tests__/reanchor.test.ts",
+  "hooks/__tests__/redact-log-path-exemption.test.ts",
+  "hooks/__tests__/run-trace.test.ts",
+  "hooks/__tests__/run-trace-close-active-guard.test.ts",
+  "hooks/__tests__/teammate-idle.test.ts",
+  "hooks/agent-team/__tests__/task-completed.test.ts",
+  "hooks/agent-team/__tests__/teammate-idle.test.ts",
+  // PCL-FU-07 dependency-security remediation (2026-08-19): the two lockfiles
+  // move every audited hook dependency to a non-vulnerable version. Rebuilding
+  // the committed hooks with js-yaml 4.3.1 and esbuild 0.28.2 changes the
+  // detect-guild-version bundle even though its TypeScript source is unchanged;
+  // the hook suites and bundle determinism gate re-prove the generated surface.
+  "hooks/package-lock.json",
+  "hooks/agent-team/package-lock.json",
+  "hooks/dist/detect-guild-version.js",
+  // PCL-FU-06 beta.8 CI repair: the release manifest advances to the fresh
+  // boundary and the close/reopen regression fixture adopts a canonical run id.
+  ".claude-plugin/marketplace.json",
+  "hooks/__tests__/run-trace-close-reopen.test.ts",
+  // plugin-layout-reshape T04 (commands fold, 22 -> 13): the ENTIRE commands/ surface
+  // is the deliverable, so every file under it is a VERIFIED intentional delta, not
+  // drift. Thirteen dispatchers (each <=40 lines, one assembler, compiled-Node spawns —
+  // KTD24), the new `maintain` command, eleven KTD14 print-only aliases, and the
+  // allowlist that enumerates them. `.claude-plugin/plugin.json` lists the 24 files.
+  // The layout lint (`no-14th-command-file`, `command-max-40-lines`) and the
+  // re-ratified SC-W2-5 / SC-W3-6 tree pins are the byte-level gates on this set, so
+  // the anti-vacuity floor moves to those guards rather than disappearing. After the
+  // lead commits, HEAD advances and these entries become harmless no-ops.
+  ".claude-plugin/plugin.json",
+  "commands/aliases.allowlist.json",
+  "commands/adopt.md",
+  "commands/audit.md",
+  "commands/build.md",
+  "commands/config.md",
+  "commands/dashboard.md",
+  "commands/evolve.md",
+  "commands/fix.md",
+  "commands/goal.md",
+  "commands/guild.md",
+  "commands/ideate.md",
+  "commands/init.md",
+  "commands/initiative.md",
+  "commands/learn.md",
+  "commands/maintain.md",
+  "commands/migrate.md",
+  "commands/models.md",
+  "commands/ops.md",
+  "commands/plan.md",
+  "commands/qa.md",
+  "commands/resume.md",
+  "commands/rollback.md",
+  "commands/stats.md",
+  "commands/status.md",
+  "commands/wiki.md",
+  // plugin-layout-reshape T13 (bun test migration): every hook suite now imports its
+  // runner from "bun:test" instead of Jest's globals, and the committed bundles were
+  // recompiled because comments in their domain sources name the relocated test
+  // paths (compile --check pins them). No hook source behaviour changed; the hook
+  // suites and the bundle-determinism gate re-prove the surface. After the lead
+  // commits, HEAD advances and these entries become harmless no-ops.
+  "hooks/__tests__/bootstrap-capability.test.ts",
+  "hooks/__tests__/bypass-forcing.test.ts",
+  "hooks/__tests__/capture-telemetry.test.ts",
+  "hooks/__tests__/comms-format-lint.test.ts",
+  "hooks/__tests__/detect-guild-version.test.ts",
+  "hooks/__tests__/emit-learning-checkpoint.test.ts",
+  "hooks/__tests__/gate-outcome-writer.test.ts",
+  "hooks/__tests__/guild-root.test.ts",
+  "hooks/__tests__/handoff-v2.test.ts",
+  "hooks/__tests__/heartbeat-tier-timeout.test.ts",
+  "hooks/__tests__/heartbeat-write.test.ts",
+  "hooks/__tests__/hook-binding.test.ts",
+  "hooks/__tests__/injection-guard.test.ts",
+  "hooks/__tests__/learning-backstop.test.ts",
+  "hooks/__tests__/maybe-reflect.test.ts",
+  "hooks/__tests__/phase-checkpoint-coverage.test.ts",
+  "hooks/__tests__/pre-tool-use-degrade.test.ts",
+  "hooks/__tests__/pre-tool-use-projection-gate.test.ts",
+  "hooks/__tests__/pre-tool-use-security.test.ts",
+  "hooks/__tests__/pre-tool-use-tier-guard.test.ts",
+  "hooks/__tests__/pre-tool-use-turn-bound.test.ts",
+  "hooks/__tests__/run-trace-classify-integration.test.ts",
+  "hooks/__tests__/run-trace-close-checkpoint.test.ts",
+  "hooks/__tests__/scrubbed-write.test.ts",
+  "hooks/__tests__/security-config.test.ts",
+  "hooks/__tests__/security-enforce.test.ts",
+  "hooks/__tests__/security-events.test.ts",
+  "hooks/__tests__/security-mcp-hash-pin.test.ts",
+  "hooks/__tests__/security-secrets.test.ts",
+  "hooks/__tests__/t10-hook-rungs.test.ts",
+  "hooks/__tests__/task-completed-injection.test.ts",
+  "hooks/__tests__/task-completed-scrub.test.ts",
+  "hooks/agent-team/__tests__/bus-emit.test.ts",
+  "hooks/agent-team/__tests__/task-completed-context-compliance.test.ts",
+  "hooks/agent-team/__tests__/task-created.test.ts",
+  "hooks/lib/__tests__/context-compliance.test.ts",
+  "hooks/lib/__tests__/g3-marker-blockable.test.ts",
+  "hooks/lib/__tests__/heartbeat.test.ts",
+  "hooks/lib/__tests__/lane-attribution.test.ts",
+  "hooks/lib/__tests__/run-date.test.ts",
+  "hooks/lib/__tests__/self-build.test.ts",
+  "hooks/lib/__tests__/tier-dispatch.test.ts",
+  "hooks/lib/__tests__/tool-turn-bound.test.ts",
+  "hooks/lib/__tests__/trace-v2.test.ts",
+  "hooks/lib/v1.4/__tests__/append-trace-v2.test.ts",
+  "hooks/lib/v1.4/__tests__/log-jsonl-split-parity.test.ts",
+  // plugin-layout-reshape T16F: the knowledge domain's recall CLI gained the KTD50
+  // phase-start leg, so every bundle that inlines that domain was recompiled
+  // (compile --check pins it). The bootstrap's own behaviour did not change.
+  "hooks/dist/using-guild-bootstrap.js",
+]);
+
+function gitLines(args: string[]): string[] {
+  return execFileSync("git", ["-C", PLUGIN_ROOT, ...args], { encoding: "utf8" })
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean);
+}
+
+describe("SC-W1-9 — command/hook/package entry paths byte-identical vs HEAD (A/B + allowlist)", () => {
+  it("no tracked entry-path file differs from HEAD outside the allowlist", () => {
+    const modified = gitLines(["diff", "--name-only", "HEAD", "--", ...ENTRY_PATHS]);
+    const offending = modified.filter((f) => !ENTRY_ALLOWLIST.has(f));
+    expect(offending).toEqual([]);
+  });
+
+  it("no NEW (untracked) entrypoint snuck into command/hook/package outside the allowlist", () => {
+    const untracked = gitLines(["status", "--porcelain", "--", ...ENTRY_PATHS])
+      .filter((l) => l.startsWith("??"))
+      .map((l) => l.replace(/^\?\?\s+/, ""));
+    const offending = untracked.filter((f) => !ENTRY_ALLOWLIST.has(f));
+    expect(offending).toEqual([]);
+  });
+
+  it("ANTI-VACUITY: the A/B comparator actually sees the repo (HEAD resolves, paths exist)", () => {
+    // A bogus pathspec would make the diff trivially empty — prove the comparator is live by
+    // confirming git knows these tracked entry paths (so an empty diff means 'unchanged', not 'unseen').
+    const tracked = gitLines(["ls-files", "--", ...ENTRY_PATHS]);
+    expect(tracked.length).toBeGreaterThan(0);
+    expect(tracked.some((f) => f.startsWith("commands/"))).toBe(true);
+  });
+
+  it("ANTI-VACUITY: the allowlist is TIGHT — a non-migration entry-path change would still fail", () => {
+    // The allowlist names ONLY verified migration/convergence deltas. Prove it did
+    // not get widened to a wildcard: representative entry paths that are NOT part of
+    // any admitted delta must be absent, so the offending-filter above would still
+    // flag them. Versioned manifests are legitimate release deltas, so the
+    // controls remain ordinary command/hook entry paths with no admitted change.
+    // T04 admitted the whole commands/ surface (the 22 -> 13 fold), so the controls are
+    // entry paths OUTSIDE that admitted set: a command filename that does not exist in
+    // any layout, and two hook entry paths with no admitted delta.
+    for (const notAllowed of [
+      "commands/guild-build.md",
+      "hooks/hooks.json",
+      // T12 admitted emit-learning-checkpoint.js and T16F using-guild-bootstrap.js
+      // (domain recompiles), so the control is a hook entry no lane has touched.
+      "hooks/check-skill-coverage.sh",
+    ]) {
+      expect(ENTRY_ALLOWLIST.has(notAllowed)).toBe(false);
+    }
+  });
+});

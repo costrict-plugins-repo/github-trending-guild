@@ -1,0 +1,13 @@
+{
+  "name": "guild-cross-cutting-tests",
+  "private": true,
+  "scripts": {
+    "test": "cd .. && bun test --isolate tests"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "js-yaml": "^4.3.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.5.0"
+  }
+}

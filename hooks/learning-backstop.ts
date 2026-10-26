@@ -1,0 +1,118 @@
+#!/usr/bin/env -S npx tsx
+/**
+ * hooks/learning-backstop.ts
+ *
+ * Event:   Stop (wired AFTER maybe-reflect.js and run-trace-close.js in
+ *          hooks/hooks.json — the backstop is the last word on the run's
+ *          learning trail for this turn).
+ * Purpose: G-7 (SC-3) — guarantee a `guild.learning_checkpoint.v1` record
+ *          exists for EVERY phase recorded in run.yaml's `phases_log`, even
+ *          when the model forgot to emit one at the phase boundary. The
+ *          emitted record is the no-op all-`none` 12-target verdict, marked
+ *          `backstop: true` (see hooks/lib/learning-backstop.ts for the
+ *          sweep + phase-token mapping).
+ *
+ * Only fires when:
+ *   - a run-id is resolvable (GUILD_RUN_ID explicit binding env ONLY —
+ *     session_context §5 / T3b: sentinels are interactive intake, never a
+ *     writer identity), AND
+ *   - `<runDir>/run.yaml` exists (a run that was actually started).
+ * A bare chat session is a silent no-op. Idempotent: existing checkpoint
+ * files (model-emitted or prior backstop) are never overwritten.
+ *
+ * Stdin:  Claude Code Stop hook payload (JSON).
+ * Stdout: Silent.
+ * Stderr: Diagnostics only.
+ * Exit:   Always 0 — a backstop failure must never block session end.
+ *
+ * Runner: bundled to dist/learning-backstop.js via esbuild (hooks/package.json).
+ */
+
+import { resolveGuildRoot } from "./lib/guild-root.js";
+import { resolveRunIdForTrace } from "./lib/run-trace.js";
+import { authorizeHookWrite, formatBindingRejected } from "./lib/hook-binding.js";
+import { runLearningBackstop } from "./lib/learning-backstop.js";
+// T10 (KTD23/R45): the layout bootstrap, fail-open wrapper for hook entries.
+import { ensureStorageLayout } from "./lib/ensure-layout.js";
+
+interface HookPayload {
+  session_id?: string;
+  cwd?: string;
+  hook_event_name?: string;
+  stop_reason?: string;
+}
+
+async function readStdin(): Promise<string> {
+  return new Promise((resolve) => {
+    const chunks: Buffer[] = [];
+    process.stdin.on("data", (c: Buffer) => chunks.push(c));
+    process.stdin.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+    process.stdin.on("error", () => resolve(""));
+  });
+}
+
+async function main(): Promise<void> {
+  const raw = await readStdin();
+  let payload: HookPayload = {};
+  try {
+    payload = JSON.parse(raw.trim()) as HookPayload;
+  } catch {
+    process.exit(0); // invalid payload — silent no-op
+  }
+
+  const cwd = process.env["GUILD_CWD"] ?? payload.cwd ?? process.cwd();
+  // Walk up from cwd to find the repo root — .guild/ lives at the repo root.
+  const guildRoot = resolveGuildRoot(cwd);
+
+  // T10 (KTD23): layout bootstrap on a write-capable entry. A hook can be the
+  // first thing to touch a root after an upgrade landed, so it runs the
+  // bootstrap itself; on a current root this is a stat plus one marker read.
+  // Fail-open by contract — a refused root still exits 0.
+  const layout = ensureStorageLayout(guildRoot, "learning-backstop");
+  // KTD23 fails CLOSED on a layout this build does not understand: a future
+  // marker means every write below would land in a root that is not ours.
+  if (!layout.ok) {
+    process.stderr.write(`warn: [learning-backstop] .guild layout refused (${layout.refused}) — no writes\n`);
+    return;
+  }
+
+  const runId = resolveRunIdForTrace(guildRoot, {
+    GUILD_RUN_ID: process.env["GUILD_RUN_ID"],
+  });
+  if (!runId) process.exit(0); // no active run — nothing to backstop
+
+  // T3b (session_context §5): backstop checkpoints are runtime writes —
+  // verified against the run's minted binding; refused → no write, exit 0.
+  const auth = authorizeHookWrite(guildRoot, { runId });
+  if (auth.ok === false) {
+    process.stderr.write(formatBindingRejected("learning-backstop", auth));
+    process.exit(0);
+  }
+
+  const result = runLearningBackstop({ guildRoot, runId });
+
+  if (result.written.length > 0) {
+    process.stderr.write(
+      `[learning-backstop] wrote ${result.written.length} backstop checkpoint(s) ` +
+        `for run ${runId}: [${result.written.join(", ")}]\n`,
+    );
+  }
+  if (result.unknownTokens.length > 0) {
+    process.stderr.write(
+      `[learning-backstop] WARN: unknown phases_log token(s) skipped: ` +
+        `[${result.unknownTokens.join(", ")}]\n`,
+    );
+  }
+  for (const err of result.errors) {
+    process.stderr.write(`[learning-backstop] WARN: ${err}\n`);
+  }
+
+  process.exit(0);
+}
+
+main().catch((err: unknown) => {
+  process.stderr.write(
+    `[learning-backstop] FATAL: ${err instanceof Error ? err.message : String(err)}\n`,
+  );
+  process.exit(0); // never block session end
+});

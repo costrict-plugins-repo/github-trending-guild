@@ -1,0 +1,22 @@
+{
+  "schema_version": "guild.module_manifest.v1",
+  "id": "workspace",
+  "title": "Workspace Federation",
+  "kind": "substrate",
+  "implementation_mode": "workflow-backed",
+  "description": "Owns umbrella/subrepo detection, workspace manifests, federated query, and promotion.",
+  "depends_on": [
+    "config",
+    "kernel",
+    "knowledge",
+    "state"
+  ],
+  "owns": {
+    "scripts": [
+      "workspace/detect",
+      "workspace/federated-query",
+      "workspace/promote-upstream",
+      "workspace/write-manifest"
+    ]
+  }
+}

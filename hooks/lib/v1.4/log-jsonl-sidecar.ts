@@ -1,0 +1,16 @@
+export {
+  appendSidecarPre,
+  consumeSidecarPre,
+  buildToolCallFromPair,
+  buildOrphanedToolCall,
+  buildToolCallFromPostOnly,
+  sweepOrphanedSidecar,
+  sweepOrphanedSidecarFull,
+  type SidecarPreEntry,
+  EVENT_LOG_SIDECAR_MAX_BYTES as SIDECAR_MAX_BYTES,
+  type SidecarAppendOptions,
+  type SidecarMatchKey,
+  ORPHAN_RESULT_EXCERPT,
+  ORPHAN_LATENCY_MS,
+  type OrphanSweepResult,
+} from "../../../src/domains/lifecycle/index.js";

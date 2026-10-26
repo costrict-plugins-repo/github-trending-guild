@@ -1,0 +1,46 @@
+/**
+ * src/domains/knowledge/knowledge-graph-contract.ts
+ *
+ * Shared type contract for Guild knowledge graph nodes and edges. The large
+ * learn/lib/schema.ts validator remains the runtime schema surface for now.
+ */
+
+import { sealSet } from "../kernel";
+
+export interface GraphNode {
+  id: string;
+  type: string;
+  name: string;
+  source_refs: string[];
+  confidence: "high" | "medium" | "low";
+  category?: string;
+  /**
+   * I14 (legacy G2): provably exported from its module (structural extractor's
+   * syntactic export marker). Absent on pre-I14 graphs and on non-symbol nodes
+   * — consumers must treat a missing flag as unknown, never as false-exported.
+   */
+  exported?: boolean;
+  importance?: string;
+  importance_score?: number;
+  topic_path?: string[];
+  labels?: string[];
+  [k: string]: unknown;
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: string;
+  direction: "out" | "in" | "bi";
+  weight: number;
+  description?: string;
+  [k: string]: unknown;
+}
+
+export const NODE_CATEGORIES = sealSet([
+  "function", "class", "module", "config", "endpoint", "pipeline", "schema",
+  "concept", "fact", "claim", "principle", "definition", "example",
+  "guide", "tutorial", "reference", "overview", "changelog", "architecture",
+  "decision", "standard", "recipe", "checklist",
+  "component", "domain", "diagram", "index", "note",
+], "NODE_CATEGORIES");

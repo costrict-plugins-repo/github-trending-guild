@@ -1,0 +1,45 @@
+#!/bin/sh
+# pre-push — refuse direct push to the channel branches (main, next)
+#
+# Codifies the rule from .guild/wiki/decisions/no-direct-commits-to-main.md
+# and .guild/wiki/standards/release-discipline.md rules 1-2: every human change
+# goes through a branch + PR. main is the STABLE channel (only the exact
+# same-repository next branch promotes there); next is the BETA/integration
+# channel (all feature and evidence-preparation PRs land there).
+# A direct push to either bypasses CI and ships straight to channel followers.
+#
+# Bypass for emergencies (channel bootstrap, force-push to recover from a slip):
+#   GUILD_ALLOW_PUSH_MAIN=1 git push origin main   # unlocks main AND next
+# When the bypass is set, the hook prints a loud reminder so the operator
+# knows they're in the escape hatch.
+#
+# Setup:
+#   git config core.hooksPath .githooks
+# CI / fresh clones: re-run the setup line. The hook is checked into the
+# repo; the config pointer is per-clone.
+
+remote="$1"
+url="$2"
+
+while read -r local_ref local_sha remote_ref remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main|refs/heads/master|refs/heads/next)
+      if [ "${GUILD_ALLOW_PUSH_MAIN:-}" = "1" ]; then
+        printf "\033[33m[pre-push]\033[0m WARN — bypassing channel-branch protection (GUILD_ALLOW_PUSH_MAIN=1) to push %s\n" "$remote_ref" >&2
+        continue
+      fi
+      printf "\033[31m[pre-push]\033[0m REFUSED — direct push to %s is a workflow violation\n" "$remote_ref" >&2
+      printf "  Branch + PR is mandatory for humans. See .guild/wiki/standards/release-discipline.md rules 1-2.\n" >&2
+      printf "  Recover:\n" >&2
+      printf "    git checkout -b feature/<slug>      # features/fixes -> PR --base next\n" >&2
+      printf "    git push -u origin <branch>\n" >&2
+      printf "    gh pr create --base next            # features/fixes/evidence preparation\n" >&2
+      printf "    gh pr create --head next --base main # stable promotion; no release branch\n" >&2
+      printf "  Bypass (emergency only):\n" >&2
+      printf "    GUILD_ALLOW_PUSH_MAIN=1 git push origin <branch>\n" >&2
+      exit 1
+      ;;
+  esac
+done
+
+exit 0

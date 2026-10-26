@@ -1,0 +1,38 @@
+/**
+ * Backward-compatible executable entrypoint.
+ *
+ * Run manifest wiring lives in src/modules/lifecycle so the reorg can move
+ * internals without breaking existing imports from scripts/lib/run-manifest-wiring.
+ */
+
+import { runRunManifestWiringCli } from "../../src/domains/lifecycle/index";
+
+export {
+  validateRunManifest,
+  wireRunManifest,
+  buildMultiWaveProgram,
+  runRunManifestWiringCli,
+  type Wave,
+  type WavePatch,
+  type WaveStatus,
+  type ProgramStatus,
+  type RunManifest,
+  manifestPathFor,
+  readRunManifest,
+  writeRunManifest,
+  initRunManifest,
+  upsertWave,
+  setProgramStatus,
+  PROGRAM_STATUSES,
+  WAVE_STATUSES,
+  MANIFEST_REQUIRED_KEYS,
+  WAVE_REQUIRED_KEYS,
+  type ValidationResult,
+  type WireRunManifestOpts,
+  type WireResult,
+  type MultiWaveProgramOpts,
+} from "../../src/domains/lifecycle/index";
+
+if (require.main === module) {
+  runRunManifestWiringCli();
+}

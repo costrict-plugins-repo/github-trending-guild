@@ -1,0 +1,46 @@
+{
+  "name": "guild-scripts",
+  "private": true,
+  "scripts": {
+    "test": "cd .. && bun test --isolate scripts",
+    "build:activated-host-conformance": "bun ../scripts/compile.ts --only=conformance",
+    "build:inventory": "npx tsx build-inventory.ts",
+    "check:inventory": "npx tsx build-inventory.ts --check",
+    "build:hosts": "npx tsx build-host-packages.ts",
+    "check:docs-architecture": "npx tsx check-docs-architecture.ts",
+    "check:modules": "npx tsx check-domain-ownership.ts",
+    "check:path-containment": "npx tsx check-path-containment.ts",
+    "sync:claude-install": "npx tsx build-host-packages.ts --sync-claude-install",
+    "check:claude-install": "npx tsx build-host-packages.ts --check-claude-install",
+    "check:module-source-of-truth": "npm run check:modules -- --root .. && npm run check:claude-install -- --root ..",
+    "verify:host-packages": "npx tsx build-host-packages.ts --check-claude-install --root .. && npx tsx verify-host-packages.ts --root ..",
+    "check:host-support-matrix": "npx tsx generate-support-matrix.ts --check",
+    "check:channel-integrity": "npx tsx check-channel-integrity.ts",
+    "check:stable-promotion": "npx tsx check-channel-integrity.ts promotion",
+    "capture:activated-host": "node dist/activated-host-conformance.js capture",
+    "verify:activated-host": "node dist/activated-host-conformance.js verify",
+    "project:activated-host-public": "node dist/activated-host-conformance.js public-project",
+    "emit:migration-boundary": "npx tsx capability-migration-boundary.ts",
+    "emit:release-conformance": "npx tsx emit-release-conformance.ts",
+    "finalize:stable-release": "npx tsx finalize-stable-release.ts",
+    "release:changelog": "npx tsx release-changelog.ts",
+    "sign:release-attestation": "npx tsx sign-release-attestation.ts",
+    "verify:installer": "npx tsx verify-installer.ts",
+    "verify:installer-execution": "npx tsx verify-installer.ts --execute-fixtures",
+    "verify:installer-live": "npx tsx verify-installer.ts --execute-live-isolated",
+    "build:verify": "npx tsx build-verify.ts",
+    "build:verify:refresh": "npx tsx build-verify.ts --refresh-receipts",
+    "desktop-app-smoke": "npx tsx desktop-app-smoke.ts",
+    "verify:desktop-app-smoke": "npx tsx verify-desktop-app-smoke.ts",
+    "lint:layout": "npx tsx lint/layout-laws.ts"
+  },
+  "dependencies": {
+    "js-yaml": "^4.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "0.28.2",
+    "tsx": "^4.21.0",
+    "typescript": "^5.5.0"
+  }
+}

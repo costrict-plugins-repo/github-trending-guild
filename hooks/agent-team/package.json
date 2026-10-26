@@ -1,0 +1,12 @@
+{
+  "name": "guild-agent-team-hooks",
+  "private": true,
+  "scripts": {
+    "test": "cd ../.. && bun test --isolate hooks/agent-team"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.5.0"
+  }
+}

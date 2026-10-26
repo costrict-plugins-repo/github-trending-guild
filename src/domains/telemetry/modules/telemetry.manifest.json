@@ -1,0 +1,39 @@
+{
+  "schema_version": "guild.module_manifest.v1",
+  "id": "telemetry",
+  "title": "Telemetry",
+  "kind": "operator",
+  "implementation_mode": "workflow-backed",
+  "description": "Owns capture hooks, trace events, run trace, the shared run-event reader, trace summaries, and guild-telemetry MCP.",
+  "depends_on": [
+    "kernel",
+    "state"
+  ],
+  "owns": {
+    "commands": [
+      "stats"
+    ],
+    "hooks": [
+      "PostToolUse:capture-telemetry.js",
+      "Stop:run-trace-close.js",
+      "SubagentStop:capture-telemetry.js",
+      "UserPromptSubmit:capture-telemetry.js",
+      "UserPromptSubmit:run-trace-start.js"
+    ],
+    "mcp_servers": [
+      "guild-telemetry"
+    ],
+    "scripts": [
+      "audit-run-sinks",
+      "recall-stats",
+      "run-analysis",
+      "task-cell-telemetry",
+      "trace-summarize",
+      "v1.4-log-validator",
+      "lib/guild-trace-emit",
+      "lib/guild-trace-events",
+      "lib/run-sinks",
+      "hooks/dist/run-trace"
+    ]
+  }
+}

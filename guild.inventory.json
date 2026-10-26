@@ -1,0 +1,2486 @@
+{
+  "schema_version": "guild.inventory.v1",
+  "generated_at": "1970-01-01T00:00:00.000Z",
+  "plugin_version": "3.2.0",
+  "manifest": {
+    "name": "guild",
+    "version": "3.2.0",
+    "description": "A team-of-specialists plugin for AI coding hosts: 15 domain specialist type templates across engineering, content, and commercial groups (minted into your project on demand) plus 3 machinery agents, the v2 single-verb lifecycle (init · ideate · plan · build · qa · ops), a categorized wiki with decision capture, and a self-evolution loop with shadow-mode gating.",
+    "homepage": "https://guildstack.dev",
+    "repository": "https://github.com/lookatitude/guild",
+    "author": {
+      "name": "Miguel Pinto",
+      "email": "guild@lookatitude.com"
+    },
+    "license": "MIT",
+    "keywords": [
+      "agents",
+      "subagents",
+      "agent-team",
+      "skills",
+      "specialists",
+      "wiki",
+      "self-evolution",
+      "tmux",
+      "mcp"
+    ]
+  },
+  "commands": [
+    {
+      "id": "build",
+      "source_path": "commands/build.md",
+      "description": "Development — per lane: assemble the specialist context bundle, dispatch the lane on the backend locked in at intake (snapshot effective.agent_mode), collect the handoff receipt, then run the G-lane review gate. Dispatches to guild:execute-plan."
+    },
+    {
+      "id": "config",
+      "source_path": "commands/config.md",
+      "description": "Project config surface — resolve, render, validate and edit .guild/ policy config, pin per-run roles, detect providers, re-pin MCP hashes, and reconcile against the typed schema. Sub-verbs `models` (READ-ONLY session-binding evidence) and `migrate` (v1->v2 layout inspect / dry-run / retry) route to their own CLIs, not to config-cmd."
+    },
+    {
+      "id": "guild",
+      "source_path": "commands/guild.md",
+      "description": "Bare Guild entry (T0) — no verb runs six-way intake; `research` / `debug` / `--class=` bind the workflow class directly. Surfaces the proposed phase and class for confirmation, never silently. Dispatches to guild:using-guild."
+    },
+    {
+      "id": "ideate",
+      "source_path": "commands/ideate.md",
+      "description": "Ideation — Socratic spec; the L1 clarify loop runs whenever the resolved loops include spec (default --rigor=standard and deep; quick skips it). Dispatches to guild:brainstorm."
+    },
+    {
+      "id": "init",
+      "source_path": "commands/init.md",
+      "description": "Init — onboard an existing repo or scaffold new-product knowledge; builds wiki + (brownfield) cheap-scan CodebaseMap + architecture-map stub (cheap by default). The full learn-* pipeline runs only under --learn or defaults.auto_learn (D3). Sub-verb `adopt` localizes shipped capability into this project. Dispatches to guild:init."
+    },
+    {
+      "id": "initiative",
+      "source_path": "commands/initiative.md",
+      "description": "Durable work — opt-in noun with sub-verbs new|status|list|resume|update|archive|restore|close. A one-off /guild run never creates an initiative; attachment is explicit only. Dispatches to guild:initiative."
+    },
+    {
+      "id": "learn",
+      "source_path": "commands/learn.md",
+      "description": "Understand-everything — no sub-verb runs the smart full learn-all (detect target, run the pipeline, update indexes, emit knowledge candidates). Sub-verbs map | graph | knowledge | onboard | diff | explain | harvest scope it. Dispatches to guild:learn."
+    },
+    {
+      "id": "maintain",
+      "source_path": "commands/maintain.md",
+      "description": "Self-heal + RSI — sub-verbs evolve | rollback | audit | fix | gc | wiki revert | analyze. ONE assembler: every sub-verb dispatches guild:evolve, which routes the token to its own chapter (`guild:evolve §Sub-verbs`). One gate, two homes: project targets write this repo's .guild/, machinery targets write a candidate a human commits."
+    },
+    {
+      "id": "ops",
+      "source_path": "commands/ops.md",
+      "description": "Operations — five runbook classes (release / monitoring / incident / rollback / maintenance) selected by the positional [runbook] or surfaced detection, each behind a mandatory pre-flight dry-run. Dispatches to guild:operations."
+    },
+    {
+      "id": "plan",
+      "source_path": "commands/plan.md",
+      "description": "Planning — team compose + PRD + per-specialist lane plan + autonomy contract. Backend (agent_mode/tmux) is resolved once at intake from the run-start preflight snapshot, not per-phase. Sub-verb `goal` emits P.O.V.E.R. goals / task groups from the approved spec. Dispatches to guild:plan."
+    },
+    {
+      "id": "qa",
+      "source_path": "commands/qa.md",
+      "description": "Quality — the one user-facing review gate: SignalScan, a surfaced selection matrix, checks under the run sandbox and budget, then the computed ReleaseGate recommendation. Opt-in phase; never auto-entered, never silently skipped. Dispatches to guild:quality."
+    },
+    {
+      "id": "status",
+      "source_path": "commands/status.md",
+      "description": "Orchestrator read — current run state, furthest phase, next gate, blockers, layout version, and the per-phase active team. Sub-verbs `resume` (continue from the next pending gate), `stats` (telemetry dashboard) and `dashboard` (launch the benchmark UI). Read-only except where `resume` advances the run."
+    },
+    {
+      "id": "wiki",
+      "source_path": "commands/wiki.md",
+      "description": "Wiki operations — ingest a source, query the wiki, or run the health lint. An unknown sub-verb prints usage and invokes nothing. Dispatches to guild:wiki."
+    }
+  ],
+  "skills": [
+    {
+      "id": "architect-adr-writer",
+      "source_path": "skills/specialists/architect-adr-writer/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes a full Architecture Decision Record (ADR) with Context / Drivers / Options / Decision / Consequences / Date / Status. Output: `.guild/runs/<run-id>/adr/<slug>.md`. Pulled by the `architect` specialist. TRIGGER: \"write an ADR for X\", \"capture this decision as an ADR\", \"document the decision to use X over Y\", \"record this architecture choice\", \"draft an ADR\", \"log the decision on the database engine\". DO NOT TRIGGER for: greenfield system design (use `architect-systems-design`), scoring unresolved options before a decision exists (use `architect-tradeoff-matrix`), persisting the decision to the project wiki (that is `guild:decisions` — this skill writes the ADR file; the architect agent hands off to `guild:decisions` if the user wants it durable in `wiki/decisions/`)."
+    },
+    {
+      "id": "architect-systems-design",
+      "source_path": "skills/specialists/architect-systems-design/SKILL.md",
+      "tier": "specialists",
+      "description": "Multi-component system design. Produces a design doc at `.guild/runs/<run-id>/design/<slug>.md` with component diagram (text/mermaid), data-flow, failure modes, and non-functional requirements (latency, availability, cost envelope). Pulled by the `architect` specialist. TRIGGER: \"design the system for X\", \"sketch the architecture of X\", \"what are the main components of X\", \"propose a high-level design\", \"draft a system diagram\", \"how should we structure the service for X\". DO NOT TRIGGER for: single-option choice between two existing approaches (use `architect-tradeoff-matrix`), capturing a decision after it's already made (use `architect-adr-writer`), API endpoint shape (backend-api-contract), DB schema (backend-data-layer), CI/CD or infra provisioning (devops-infrastructure-as-code), deployment topology (devops group), threat modeling (security-threat-modeling)."
+    },
+    {
+      "id": "architect-tradeoff-matrix",
+      "source_path": "skills/specialists/architect-tradeoff-matrix/SKILL.md",
+      "tier": "specialists",
+      "description": "Scores 2–4 architecture options across named axes (cost, complexity, performance, ops burden, time-to-ship, reversibility, etc.) and surfaces a recommendation. Output: markdown table with per-cell rationale plus a final pick. Pulled by the `architect` specialist. TRIGGER: \"compare these architecture options\", \"pick between X and Y\", \"which is better: monolith or split service\", \"score these approaches\", \"give me a tradeoff matrix for X vs Y\", \"which option should we choose\". DO NOT TRIGGER for: greenfield design with no options yet (use `architect-systems-design`), locking in a final decision as a durable record (use `architect-adr-writer`), comparing libraries or vendors at the research level (researcher-comparison-table), API vs API shape choices inside one design (backend-api-contract), DB engine selection at vendor level (researcher-comparison-table)."
+    },
+    {
+      "id": "backend-api-contract",
+      "source_path": "skills/specialists/backend-api-contract/SKILL.md",
+      "tier": "specialists",
+      "description": "Designs REST / GraphQL / RPC endpoints — routes, methods, request/response schemas, error envelope, auth, versioning, pagination. Output: OpenAPI/GraphQL SDL fragment or a markdown spec the backend can implement against. Pulled by the `backend` specialist. TRIGGER: \"design the API for X\", \"define the endpoints for X\", \"what should the request/response look like for X\", \"draft the OpenAPI spec for X\", \"specify the GraphQL schema for X\", \"how should the client call X\". DO NOT TRIGGER for: DB schema / tables / indexes (use `backend-data-layer`), writing a migration (use `backend-migration-writer`), calling an external third-party API (use `backend-service-integration`), deciding between two API styles at architecture level (architect-tradeoff-matrix), high-level multi-service system design (architect-systems-design), auth-flow security review (security-auth-flow-review)."
+    },
+    {
+      "id": "backend-data-layer",
+      "source_path": "skills/specialists/backend-data-layer/SKILL.md",
+      "tier": "specialists",
+      "description": "Designs database schemas, access patterns, indexes, and query shapes for a single storage boundary. Output: DDL (SQL) or schema fragment plus query-pattern notes and indexing plan. Pulled by the `backend` specialist. TRIGGER: \"design the schema for X\", \"what tables do we need for X\", \"model the data for X\", \"draft the DDL for X\", \"what indexes should we add for X queries\", \"how should we store X\". DO NOT TRIGGER for: writing the actual migration file (use `backend-migration-writer`), external API shape (use `backend-api-contract`), third-party integration (use `backend-service-integration`), picking a DB engine at vendor level (architect-tradeoff-matrix or researcher-comparison-table), cross-service data-flow architecture (architect-systems-design)."
+    },
+    {
+      "id": "backend-migration-writer",
+      "source_path": "skills/specialists/backend-migration-writer/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors a safe, reversible database migration — up and down files, data-backfill plan, lock-budget analysis, and rollback strategy. Pulled by the `backend` specialist. TRIGGER: \"write the migration for X\", \"generate the up/down for X column\", \"add a reversible migration for X\", \"write the backfill for X\", \"how do we safely add this index on a hot table\", \"draft the schema change for X\". DO NOT TRIGGER for: deciding *what* schema to land (use `backend-data-layer` first), external API shape (use `backend-api-contract`), deploying / running the migration in CI (devops-ci-cd-pipeline), infra-level DB provisioning (devops-infrastructure-as-code), application-level data transformations unrelated to schema (not this skill)."
+    },
+    {
+      "id": "backend-service-integration",
+      "source_path": "skills/specialists/backend-service-integration/SKILL.md",
+      "tier": "specialists",
+      "description": "Integrates a service with an external HTTP/gRPC/webhook API — client module, timeouts, retries with backoff, circuit breaker, idempotency, error mapping, and observability. Output: integration module + config + error-mapping table. Pulled by the `backend` specialist. TRIGGER: \"integrate with Stripe\", \"wire up the SendGrid client\", \"add the Twilio webhook handler\", \"call the external X API from our service\", \"build the client for the partner API\", \"how do we handle retries and timeouts calling X\". DO NOT TRIGGER for: designing *our own* API (use `backend-api-contract`), DB schema for storing integration state (use `backend-data-layer`), a migration landing integration tables (use `backend-migration-writer`), secrets management at infra level (devops group), auth-flow security review on the external protocol (security-auth-flow-review)."
+    },
+    {
+      "id": "copywriter-email-sequences",
+      "source_path": "skills/specialists/copywriter-email-sequences/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes lifecycle, onboarding, transactional, re-engagement, and drip email sequences — the sequence plan (triggers, timing, branching) plus per-email subject, preview, and body copy. Pulled by the `copywriter` specialist. TRIGGER: \"write the onboarding email sequence\", \"draft the welcome drip\", \"write the re-engagement emails for dormant users\", \"draft the trial-ending sequence\", \"write the transactional email copy for X\", \"design the lifecycle email flow\". DO NOT TRIGGER for: cold outbound or prospecting sequences (use `sales-cold-outreach`), sales follow-up after a booked call (use `sales-follow-up-sequence`), long-form blog content (use `copywriter-long-form`), in-product strings (use `copywriter-product-microcopy`), launch announcement strategy (marketing-launch-plan), social media posts (social-media-platform-post)."
+    },
+    {
+      "id": "copywriter-long-form",
+      "source_path": "skills/specialists/copywriter-long-form/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes long-form marketing copy — blog posts, case studies, thought-leadership pieces, landing-page longform — with a clear angle, an intro-body-CTA arc, and H1/H2 scaffolding a reader can scan. Pulled by the `copywriter` specialist. TRIGGER: \"write a blog post about X\", \"draft a case study on X\", \"write a long-form piece on X\", \"turn this into a 1200-word article\", \"write the thought-leadership piece\", \"draft the landing page long-form\". DO NOT TRIGGER for: in-product strings / buttons / error messages (use `copywriter-product-microcopy`), lifecycle or onboarding emails (use `copywriter-email-sequences`), defining the brand voice itself (use `copywriter-voice-guide`), user-facing product documentation (technical-writer-user-manual), how-to walkthroughs (technical-writer-tutorial), platform-native social posts (social-media-platform-post), launch positioning / GTM narratives (marketing-positioning), cold outreach sequences (sales-cold-outreach)."
+    },
+    {
+      "id": "copywriter-product-microcopy",
+      "source_path": "skills/specialists/copywriter-product-microcopy/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes in-product strings — button labels, empty states, error messages, tooltips, form labels, confirmation dialogs, toast copy. Output is a string table keyed by component/key so engineering can drop it straight into i18n files. Pulled by the `copywriter` specialist. TRIGGER: \"write the button label for X\", \"write the empty state for X\", \"rewrite this error message\", \"write tooltip copy for X\", \"draft the toast/confirmation copy\", \"name the CTA on the X screen\". DO NOT TRIGGER for: marketing blog posts or landing long-form (use `copywriter-long-form`), email sequences (use `copywriter-email-sequences`), voice guide itself (use `copywriter-voice-guide`), user manual pages (technical-writer-user-manual), getting-started tutorials (technical-writer-tutorial), social captions (social-media-platform-post), SEO meta titles and descriptions (seo-on-page-optimization)."
+    },
+    {
+      "id": "copywriter-voice-guide",
+      "source_path": "skills/specialists/copywriter-voice-guide/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors or refreshes a brand voice guide — principles, do/don't examples, sample rewrites, tone-by-surface matrix. Output is a `voice.md` the whole team writes against. Pulled by the `copywriter` specialist. TRIGGER: \"write our brand voice guide\", \"define the voice and tone\", \"create the voice doc for the product\", \"document how we sound in emails vs support vs marketing\", \"refresh our tone guidelines\", \"write the voice principles\". DO NOT TRIGGER for: writing a specific long-form piece (use `copywriter-long-form`), writing in-product strings (use `copywriter-product-microcopy`), email sequence copy (use `copywriter-email-sequences`), positioning / category narrative (marketing-positioning), style-guide for engineering docs (technical-writer group)."
+    },
+    {
+      "id": "devops-ci-cd-pipeline",
+      "source_path": "skills/specialists/devops-ci-cd-pipeline/SKILL.md",
+      "tier": "specialists",
+      "description": "Designs a CI/CD workflow — build/test/deploy stages, artifact promotion between envs, manual/auto gates, rollback hooks. Output: pipeline YAML (GitHub Actions / GitLab / CircleCI / Buildkite) plus a gate matrix showing which env needs which approval. Pulled by the `devops` specialist. TRIGGER: \"design the CI/CD pipeline for X\", \"set up the GitHub Actions workflow for X\", \"write the deploy pipeline for X\", \"wire build-test-deploy for X\", \"what stages should the pipeline have\", \"draft the release workflow\". DO NOT TRIGGER for: provisioning cloud resources / Terraform (use `devops-infrastructure-as-code`), metrics/logs/alerts wiring (use `devops-observability-setup`), writing an on-call runbook (use `devops-incident-runbook`), API contract design (backend-api-contract), test shape selection (qa-test-strategy), secret scanning (security-secrets-scan)."
+    },
+    {
+      "id": "devops-incident-runbook",
+      "source_path": "skills/specialists/devops-incident-runbook/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes a concrete on-call runbook for a specific failure mode — symptoms, diagnose steps, mitigate, rollback, and postmortem link. Output: markdown runbook keyed off the alert name. Pulled by the `devops` specialist. TRIGGER: \"write the runbook for X alert\", \"draft on-call steps for X outage\", \"document how to respond to X failure\", \"create the playbook for X incident\", \"what should on-call do when X\", \"author the incident response doc for X\". DO NOT TRIGGER for: alert rule / SLO definition (use `devops-observability-setup`), CI/CD workflow authoring (use `devops-ci-cd-pipeline`), provisioning infra the runbook touches (use `devops-infrastructure-as-code`), security incident playbook for attack response (security-threat-modeling), QA triage of flaky tests (qa-flaky-test-hunter), architectural retrospective."
+    },
+    {
+      "id": "devops-infrastructure-as-code",
+      "source_path": "skills/specialists/devops-infrastructure-as-code/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors Terraform / Pulumi / CDK for a cloud component — compute, networking, storage, IAM — with state backend, drift detection, and module boundaries. Output: IaC source files plus backend/state configuration and a module-tree note. Pulled by the `devops` specialist. TRIGGER: \"write Terraform for X\", \"provision the infra for X\", \"author the CDK stack for X\", \"Pulumi program to set up X\", \"create the IaC module for X\", \"stand up the cloud resources for X\". DO NOT TRIGGER for: CI/CD workflow / pipeline YAML (use `devops-ci-cd-pipeline`), monitoring / dashboards / alerts (use `devops-observability-setup`), runbook authoring (use `devops-incident-runbook`), high-level architecture across services (architect-systems-design), app-level config inside a service (backend group), secret rotation policy (security-secrets-scan)."
+    },
+    {
+      "id": "devops-observability-setup",
+      "source_path": "skills/specialists/devops-observability-setup/SKILL.md",
+      "tier": "specialists",
+      "description": "Wires metrics, logs, traces, SLO dashboards, and alerts for a service. Output: dashboard-as-code (Grafana / Datadog / CloudWatch JSON), alert rules, and the SLO → alert mapping. Pulled by the `devops` specialist. TRIGGER: \"add observability for X\", \"wire metrics and alerts for X\", \"set up the dashboard for X\", \"define SLOs and alerts for X\", \"instrument X with tracing\", \"what should we alert on for X\". DO NOT TRIGGER for: CI/CD pipeline setup (use `devops-ci-cd-pipeline`), provisioning the underlying infra (use `devops-infrastructure-as-code`), writing the runbook the alert links to (use `devops-incident-runbook`), app-level logging code (backend group), security event monitoring as a compliance deliverable (security-threat-modeling), test flakiness telemetry (qa-flaky-test-hunter)."
+    },
+    {
+      "id": "doc-writer-doc-site",
+      "source_path": "skills/specialists/doc-writer-doc-site/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors documentation-site pages and designs information architecture — navigation, sidebar taxonomy, page hierarchy, cross-linking strategy, doc-site generator conventions (Docusaurus, MkDocs, Nextra, VitePress, etc.). Pulled by the `doc-writer` specialist. TRIGGER: \\\"build out the docs site\\\", \\\"write the documentation site pages\\\", \\\"design the doc site navigation\\\", \\\"add a sidebar section for feature X\\\", \\\"write the docs for Y in our Docusaurus site\\\", \\\"set up the doc-site IA\\\", \\\"create a new section in MkDocs for Z\\\", \\\"update the doc-site nav\\\". DO NOT TRIGGER for: API reference tables or endpoint docs (use `technical-writer-api-docs`), changelogs or release notes pages (use `technical-writer-release-notes`), a project README (use `doc-writer-readme`), onboarding or CONTRIBUTING.md (use `doc-writer-onboarding-doc`), deploying or configuring the doc-site hosting infra (use devops specialist), marketing landing pages (use `copywriter-long-form`)."
+    },
+    {
+      "id": "doc-writer-onboarding-doc",
+      "source_path": "skills/specialists/doc-writer-onboarding-doc/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors onboarding documentation and contributor guides — getting-started narrative pages, CONTRIBUTING.md, developer onboarding docs, new-user setup guides, CODE_OF_CONDUCT.md, GOVERNANCE.md. Pulled by the `doc-writer` specialist. TRIGGER: \\\"write a getting-started guide\\\", \\\"create a CONTRIBUTING.md\\\", \\\"onboarding guide for new developers\\\", \\\"write the contributor guide\\\", \\\"new-user setup documentation\\\", \\\"developer onboarding doc\\\", \\\"write the getting started page\\\", \\\"add a CODE_OF_CONDUCT\\\". DO NOT TRIGGER for: project README overview (use `doc-writer-readme`), onboarding email sequences for existing SaaS users (use `copywriter-email-sequences` — copywriter owns lifecycle nurture emails), API reference docs (use `technical-writer-api-docs`), formal step-by-step tutorials with prerequisite/verify blocks (use `technical-writer-tutorial`), changelogs or release notes (use `technical-writer-release-notes`), marketing copy about onboarding (use `copywriter-long-form`)."
+    },
+    {
+      "id": "doc-writer-product-guide",
+      "source_path": "skills/specialists/doc-writer-product-guide/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors product feature documentation and conceptual guides — what-is-X explanations, feature overview pages, conceptual architecture docs, how-it-works narratives, system-explanation guides. Pulled by the `doc-writer` specialist. TRIGGER: \\\"write a feature guide for X\\\", \\\"explain how Y works in the docs\\\", \\\"conceptual overview of the API\\\", \\\"add a guide explaining our architecture\\\", \\\"write a product documentation page for feature X\\\", \\\"write a how-to doc for configuring Y\\\", \\\"add a what-is page for Z\\\". DO NOT TRIGGER for: API endpoint reference tables or parameter docs (use `technical-writer-api-docs`), formal step-by-step tutorials with prerequisite/verify blocks (use `technical-writer-tutorial`), formal user manuals with task hierarchy (use `technical-writer-user-manual`), landing-page prose or marketing copy (use `copywriter-long-form`), blog posts about the feature (use `copywriter-long-form`), doc-site navigation and IA design (use `doc-writer-doc-site`)."
+    },
+    {
+      "id": "doc-writer-readme",
+      "source_path": "skills/specialists/doc-writer-readme/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors or updates a project README — overview, quick-start, installation, usage, badges, contributing pointer, license section. Reads existing README conventions and repo type before writing. Pulled by the `doc-writer` specialist. TRIGGER: \\\"write a README for this project\\\", \\\"update the README\\\", \\\"add a quick-start section to the README\\\", \\\"the README is outdated, fix it\\\", \\\"create a README for my CLI tool\\\", \\\"add badges and installation instructions to the README\\\". DO NOT TRIGGER for: API reference docs or endpoint tables (use `technical-writer-api-docs`), formal user manuals (use `technical-writer-user-manual`), changelog entries or release notes (use `technical-writer-release-notes`), blog post announcing the project (use `copywriter-long-form`), onboarding documentation or CONTRIBUTING.md (use `doc-writer-onboarding-doc`), doc-site pages beyond the README (use `doc-writer-doc-site`)."
+    },
+    {
+      "id": "frontend-a11y",
+      "source_path": "skills/specialists/frontend-a11y/SKILL.md",
+      "tier": "specialists",
+      "description": "Implements web accessibility to an explicit baseline (WCAG AA public, operator-tool internal) — semantic HTML first, ARIA only when needed, keyboard navigation, focus management, and screen-reader behaviour. Output: a code change plus an axe / Lighthouse a11y measurement before vs after. Pulled by the `frontend` specialist. TRIGGER: \"make X keyboard-navigable\", \"fix the Lighthouse / axe a11y findings on X\", \"add ARIA / roles / labels to X\", \"manage focus in the X modal\", \"is X screen-reader accessible\", \"add a skip link / focus trap to X\". DO NOT TRIGGER for: technical SEO audits, crawlability, meta / structured-data (seo-technical-audit — seo diagnoses, frontend implements the fix), UI microcopy / label wording (copywriter-product-microcopy — frontend wires the strings in), React component internals (use `frontend-react`), state wiring (use `frontend-state-management`), bundler config (use `frontend-bundler-config`), React Native a11y (mobile-react-native — distinct runtime)."
+    },
+    {
+      "id": "frontend-bundler-config",
+      "source_path": "skills/specialists/frontend-bundler-config/SKILL.md",
+      "tier": "specialists",
+      "description": "Configures the frontend build — Vite / Webpack / esbuild / Rollup: dev server, code splitting, tree shaking, asset handling, env-var injection, production optimisation, and bundle-size budgets. Output: a config diff plus a before/after measurement (bundle size, build time, dev-server start). Pulled by the `frontend` specialist. TRIGGER: \"write the Vite config for X\", \"code-split the X route\", \"set up tree shaking / shrink the bundle for X\", \"configure the dev server / HMR for X\", \"wire env variables into the build\", \"set a bundle-size budget for X\", \"why is the production build so large\". DO NOT TRIGGER for: CI/CD pipelines, deploy steps, release automation (devops-ci-cd-pipeline — frontend writes the build script, devops wires the pipeline), infra / CDN provisioning (devops-infrastructure-as-code), React component authoring (use `frontend-react`), state / data-fetching (use `frontend-state-management`), accessibility (use `frontend-a11y`), React Native / Expo / EAS builds (mobile-react-native)."
+    },
+    {
+      "id": "frontend-react",
+      "source_path": "skills/specialists/frontend-react/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors React components with disciplined hooks, Suspense and error boundaries, and justified memoization — render-cost reasoning over premature optimization. Output: TypeScript/JSX component source plus a component test where logic is non-trivial. Pulled by the `frontend` specialist. TRIGGER: \"build the React component for X\", \"write the X view in React\", \"wrap X in a Suspense boundary\", \"add an error boundary around X\", \"why is this React component re-rendering\", \"should I memoize X / useMemo here\", \"author the hook for X\". DO NOT TRIGGER for: React Native / Expo screens (use `mobile-react-native` — distinct runtime), store / server-state wiring (use `frontend-state-management`), Vite/Webpack/esbuild config (use `frontend-bundler-config`), keyboard / ARIA / focus work (use `frontend-a11y`), API or data-layer shape (backend-api-contract / backend-data-layer), test-suite strategy (qa-test-strategy), UI / visual / brand design (architect-systems-design — no visual-design specialist yet)."
+    },
+    {
+      "id": "frontend-state-management",
+      "source_path": "skills/specialists/frontend-state-management/SKILL.md",
+      "tier": "specialists",
+      "description": "Designs client-side state architecture across frameworks — local vs global, server-state vs client-state separation (React Query / SWR / TanStack Query), store shape (Redux / Zustand / Pinia / Svelte stores), selectors, and cache normalisation. Output: a state-shape decision plus the wiring code and a test pinning the boundary. Pulled by the `frontend` specialist. TRIGGER: \"where should this state live\", \"local vs global state for X\", \"set up React Query / SWR / TanStack for X\", \"design the Zustand / Redux / Pinia store for X\", \"normalise the cache for X\", \"share filter state across X\", \"add selectors for X\". DO NOT TRIGGER for: server-side data layer, schema, or query design (backend-data-layer — that's the source of truth; this is the client cache), API contract shape (backend-api-contract), React component internals / hooks (use `frontend-react`), bundler config (use `frontend-bundler-config`), accessibility (use `frontend-a11y`), React Native runtime stores (mobile-react-native)."
+    },
+    {
+      "id": "guild-brainstorm",
+      "source_path": "skills/meta/brainstorm/SKILL.md",
+      "tier": "meta",
+      "description": "Socratic clustered-question flow that turns a vague user brief into an approved `.guild/spec/<slug>.md`. Captures the seven planning-contract fields — goal, audience, success criteria, non-goals, constraints, autonomy policy, and known risks/rollback — plus an eighth assumptions-vs-blocking-unknowns roll-up. TRIGGER on \"let's plan X\", \"help me scope this feature\", \"what are we actually building\", \"start a new Guild task\", \"I have a vague idea for …\", or any `/guild` invocation with a brief shorter than the planning-contract checklist. Supports a `--skip` escape hatch (for users who already have a clear spec); in that mode the skill validates the supplied spec and flags gaps instead of asking the full question set. DO NOT TRIGGER for implementation requests (hand off to `guild:execute-plan`), team composition (hand off to `guild:team-compose`), direct code or file edits, or micro-tasks like typo fixes and branch pushes.",
+      "indexed": true
+    },
+    {
+      "id": "guild-create-skill",
+      "source_path": "skills/meta/create-skill/SKILL.md",
+      "tier": "meta",
+      "description": "Gated mint of a NEW skill — the capability parallel to `guild:create-specialist` for skills, not agents; what phase-aware composition (G-PHASE-COMPOSE) / `guild:team-compose` takes when a phase needs a missing CAPABILITY, not a role. Interview → draft under `.guild/skills/proposed-<name>/` → boundary scan with `DO NOT TRIGGER` edits gated via `guild:evolve-skill` → paired evals + shadow mode → register within `.guild/`. Creation authority is human-requested (explicit request or team-compose option A; no historical extraction prerequisite) or evolution-proposed (all `§11.2.1` signals required). TRIGGER for \"create a new skill for <capability>\", \"mint a skill for a capability gap\", \"write a new skill from scratch for <X>\", \"phase-compose flagged a skill gap — create the skill\". DO NOT TRIGGER for minting a specialist/agent (`guild:create-specialist`), evolving or re-tuning an existing skill (`guild:evolve-skill`), composing a team (`guild:team-compose`), or rolling back a skill (`guild:rollback-skill`).",
+      "indexed": true
+    },
+    {
+      "id": "guild-create-specialist",
+      "source_path": "skills/meta/create-specialist/SKILL.md",
+      "tier": "meta",
+      "description": "Runs the §12 7-step workflow to mint a new shipping specialist — interview, draft under .guild/agents/proposed/, boundary scan, gate applicable adjacent-boundary edits, gate the new specialist, register live. Creation authority is either human-requested (an explicit request or approved team-compose option A; no historical extraction prerequisite) or evolution-proposed (all §11.2.1 historical extraction signals required). TRIGGER for \"create a new Guild specialist for <domain>\", \"mint a data-scientist specialist\", \"add a new role — <role>\", \"incubate a proposed specialist for <domain>\". DO NOT TRIGGER for minting a new skill/capability (guild:create-skill), evolving an existing specialist (guild:evolve-skill), composing a team for the current task (guild:team-compose), editing an existing agent's body (specialist-agent-writer dev agent), or rolling back a specialist (guild:rollback-skill).",
+      "indexed": true
+    },
+    {
+      "id": "guild-dashboard",
+      "source_path": "skills/playbooks/dashboard/SKILL.md",
+      "tier": "playbooks",
+      "description": "Launch the local benchmark web dashboard over THIS project's runs + knowledge — resolves the benchmark checkout (workspace sibling → in-repo → .guild/cache clone), starts `serve --project-root` on a free port (default 3055), bulk-imports the project's `.guild/runs/*/logs/v1.4-events.jsonl` via the lifecycle-import API, and prints the URL (runs table + Knowledge view + Wiki browser). All deterministic work lives in `scripts/dashboard-launch.ts`; NO network I/O (git clone / npm ci) ever happens without an explicit user confirmation → `--install`. TRIGGER for \"open the dashboard\", \"visualize the runs\", \"show the knowledge graph\", \"launch the benchmark UI\", \"/guild:dashboard\", \"browse the wiki visually\". DO NOT TRIGGER for the text-mode usage/telemetry dashboard (/guild:stats owns that — it prints, never serves), for developing or modifying the benchmark itself (that is benchmark-repo work, not a launch), or for importing a single run by hand (POST /api/imports/lifecycle directly)."
+    },
+    {
+      "id": "guild-diagnose",
+      "source_path": "skills/meta/diagnose/SKILL.md",
+      "tier": "meta",
+      "description": "Diagnose Guild plugin failures from recent .guild/runs telemetry, optional operator context, hook/audit-log evidence, and run artifacts; write a diagnosis report and fix plan; require explicit user approval before applying edits. TRIGGER for /guild:fix, \"diagnose this Guild run\", \"why did /guild fail\", \"Guild hooks are not firing\", \"audit log is empty\", \"agent-team stalled\", \"self-fix Guild\". DO NOT TRIGGER for auditing plugin script trust (/guild:audit), reviewing user application code (security specialist), normal /guild task review (guild-review), or evolving a skill based on accumulated reflections (guild:evolve-skill).",
+      "indexed": true
+    },
+    {
+      "id": "guild-evolve",
+      "source_path": "skills/meta/evolve/SKILL.md",
+      "tier": "meta",
+      "description": "Runs the §11.2 10-step evolve pipeline on one named skill — snapshot, load evals, dispatch paired subagents (A=current, B=proposed), drafter writes assertions, grader evaluates, benchmark + flip report, shadow mode, promotion gate, description optimizer, commit or archive. NEVER auto-edits a skill without passing the promotion gate; rejected attempts are archived, not deleted. TRIGGER for \"evolve guild:<skill-name>\", \"run the evolve loop on <skill>\", \"re-tune this skill's description\", \"promote this reflection into a skill edit\". DO NOT TRIGGER for creating/minting a NEW skill from a capability gap (use guild:create-skill), creating a new specialist (use guild:create-specialist), rolling back a skill version (guild:rollback-skill), reviewing runs (guild:review), composing a team (guild:team-compose), or ingesting wiki sources (guild:wiki-ingest).",
+      "indexed": true
+    },
+    {
+      "id": "guild-execute-plan",
+      "source_path": "skills/meta/execute-plan/SKILL.md",
+      "tier": "meta",
+      "description": "For each specialist lane in the plan: invoke `guild:context-assemble` to build the bundle, auto-score the lane to its lowest viable model tier (dispatched via the Agent `model` param; honors `--model-tier` and per-lane pins), then dispatch each lane via the agent_mode-resolved backend (team / tmux primary; in-process Agent() dispatch for no-tmux hosts; subagent last resort) as an ephemeral one-agent-per-task §task§agent (spawn → work → extract learnings → dismiss). Runs the advisor escalation protocol when a low-tier agent emits `escalate`. Parallelize lanes when `depends-on:` allows. Collect per-lane handoff receipts at `.guild/runs/<run-id>/handoffs/<specialist>-<task-id>.md`. TRIGGER: \"execute the plan\", \"run the lanes\", \"start specialist work\", \"dispatch the team\", \"dispatch each lane at its tier\", \"escalate this to the advisor\". DO NOT TRIGGER for: explaining the plan (guild:plan owns that), reviewing results (guild:review), writing more tests.",
+      "indexed": true
+    },
+    {
+      "id": "guild-initiative",
+      "source_path": "skills/meta/initiative/SKILL.md",
+      "tier": "meta",
+      "description": "Implements every /guild:initiative sub-verb — new|status|list|resume|update|archive|restore|close — over .guild/initiatives/{active,archived}/<id>/**. new authors initiative.yaml + the definition ledger behind the definition-ready gate; status/list are read-only; resume re-enters the next work item; update amends the ledger (--add-goal); archive/restore move active/<->archived without the release path; close is gated by the deterministic D8 gate — it MUST run scripts/initiative-gate.ts close-check and refuse to close on a non-zero exit, never re-deriving release/docs/exec resolution in prose. TRIGGER for \"/guild:initiative new|status|list|resume|update|archive|restore|close\", \"create a durable initiative\", \"attach this to an initiative\", \"is this initiative ready to close\", \"what work items are open\". DO NOT TRIGGER for a one-off /guild:guild run (opt-in attachment only), phase-command work (guild:plan, guild:execute-plan), decision capture (guild:decisions), or wiki ingestion (guild:wiki-ingest).",
+      "indexed": true
+    },
+    {
+      "id": "guild-learn",
+      "source_path": "skills/knowledge/learn/SKILL.md",
+      "tier": "knowledge",
+      "description": "Smart full learn-all dispatcher — the no-arg /guild:learn entrypoint that replaces the old usage-stop with a genuine smart full-learn. Detects target shape (regular_project | workspace | existing_guild_project | new_or_sparse_project | mixed_or_uncertain), surfaces the classification for confirmation, then runs the appropriate full pipeline: regular-project = run start → inventory → cheap-map → deep-graph (OQ1 cost-estimate gate) → derive → links → tour → candidates → indexes → provenance → checkpoint → close; workspace = detect children first, never scan sub-repos as one monolith, AUTO fan-out per learn_fanout config (OQ2), aggregate cost estimate shown before child scans, --dry-run honored. Skipped-file decisions emitted in SC-G shape. All promotions remain human-gated. TRIGGER for \\\"/guild:learn\\\" with no sub-verb, \\\"learn this project completely\\\", \\\"full learn everything\\\", \\\"run the full learn pipeline\\\", \\\"smart learn this workspace\\\", \\\"learn all artifacts end to end\\\". DO NOT TRIGGER for: single-artifact queries (the guild-wiki assembler / kg-query). An explicit sub-verb is NOT a different skill — it is this assembler loading one references/learn-<verb>.md chapter.",
+      "indexed": true
+    },
+    {
+      "id": "guild-operations",
+      "source_path": "skills/operations/SKILL.md",
+      "tier": "operations",
+      "description": "The full guild:operations skill — the 5-runbook-class taxonomy with split autonomy posture, the 4 non-negotiable safety rails + mandatory pre-flight (machine-checkable as 5 booleans), ExecuteRunbook + the advisory G-operations trail, and the guild.release.v1 ↔ D8 close-gate three-leg field join (consume-only). TRIGGER for \"run the runbook\", \"operations\", \"deploy/release runbook\", \"monitoring\", \"incident\", \"rollback\", \"maintenance\", \"ops\". DO NOT TRIGGER for the quality gate / release readiness computation (guild:quality owns it), for authoring a runbook's content (devops-* specialists produce it), or for closing the initiative (InitiativeCloseout owns D8 closure — operations only supplies evidence).",
+      "indexed": true
+    },
+    {
+      "id": "guild-plan",
+      "source_path": "skills/meta/plan/SKILL.md",
+      "tier": "meta",
+      "description": "Turns an approved `.guild/spec/<slug>.md` plus the per-phase team file `.guild/team/<slug>.<phase>.yaml` into a per-specialist lane plan at `.guild/plan/<slug>.md`. Each lane carries `task-id`, `owner`, `depends-on:`, `scope`, `success-criteria`, `autonomy-policy`, and a seed `complexity_score`+`tier` (re-scored at dispatch) so `guild:execute-plan` can dispatch parallel-where-possible subagents. FORKS `guild:plan` rather than referencing — writing-plans emits a generic linear implementation plan; `guild:plan` emits specialist lanes tied to a composed team and feeds Guild's dispatch/review loop. TRIGGER on \"turn this spec into a plan\", \"break the work down by specialist\", \"plan the lanes for this task\", \"we have a team — now plan the work\". DO NOT TRIGGER for: writing the code itself (`guild:execute-plan`), brainstorming a new feature (`guild:brainstorm`), reviewing finished work (`guild:review`), or generic implementation plans outside the Guild lifecycle (use `guild:plan`).",
+      "indexed": true
+    },
+    {
+      "id": "guild-quality",
+      "source_path": "skills/quality/SKILL.md",
+      "tier": "quality",
+      "description": "The full guild:quality skill — deterministic SignalScan→SelectMatrix selection, RunChecks under sandbox + canonical budget, the advisory G-quality challenger trail, and the COMPUTED ReleaseGate predicate with the --auto-approve BLOCK-override asymmetry. TRIGGER for \"run quality\", \"quality gate\", \"release readiness\", \"should we release\", \"run the checks\", \"quality selection\", \"release gate\". DO NOT TRIGGER for operations/runbooks (guild:operations owns release/monitoring/incident/rollback/maintenance), for authoring or installing a test framework (qa-* specialists own that), or for the D8 initiative close-gate (InitiativeCloseout owns closure).",
+      "indexed": true
+    },
+    {
+      "id": "guild-reflect",
+      "source_path": "skills/meta/reflect/SKILL.md",
+      "tier": "meta",
+      "description": "Post-task reflection. Consumes a compact run summary (from scripts/trace-summarize.ts), handoff receipts, and verify.md, and emits proposals to .guild/reflections/<run-id>.md. Proposals cover (a) skill-improvement candidates (a skill triggered wrong N times, or body needs a new section), (b) missing-specialist candidates (gap repeated >=3 runs), (c) context-bundle issues (over 3k tokens, summarization hit), (d) followups not addressed. Does NOT write to .guild/wiki/ — that is wiki-ingest / decisions territory. TRIGGER for \"reflect on this run\", \"what did we learn\", \"run post-task reflection\", \"capture lessons from the specialist outputs\", \"any skill gaps in this run\". DO NOT TRIGGER for wiki ingest (guild:wiki-ingest owns), capturing a decision (guild:decisions), any mid-task reflection (only fires post-verify-done), or promoting a reflection to the wiki.",
+      "indexed": true
+    },
+    {
+      "id": "guild-review",
+      "source_path": "skills/meta/review/SKILL.md",
+      "tier": "meta",
+      "description": "Two-stage review of per-specialist handoff receipts (spec compliance first, then quality), plus Guild's fresh-context code-review request/response discipline — how a lane solicits a reviewer with crafted context, and how it acts on the findings (triage; push back only with technical evidence). Consumes compact receipts from `.guild/runs/<run-id>/handoffs/` — NOT full specialist conversations — and writes `.guild/runs/<run-id>/review.md` with per-lane pass/fail + blocker list. TRIGGER: \"review the specialist outputs\", \"check if this matches the spec\", \"evaluate the handoffs\", \"request a code review\", \"respond to the review findings\", \"the reviewer found X\". DO NOT TRIGGER for: final task-close gating (guild:verify-done), writing more code, or re-planning.",
+      "indexed": true
+    },
+    {
+      "id": "guild-team-compose",
+      "source_path": "skills/meta/team-compose/SKILL.md",
+      "tier": "meta",
+      "description": "Match spec domains against the consuming repo's project specialists (`.guild/agents/*.md`, reused never re-created) AND Guild's shipped specialist TYPE templates (minted into `.guild/agents/` via roster-resolve mint); present existing + gaps with A/B/C/D options, propose the FULL justified logical team — task-derived, UNCAPPED, with necessity rationale + excluded roles (`guild.team_proposal.v2`) — then WAIT at the `guild.team_decision.v1` user gate (approve / restructure: add, remove, substitute, edit dependencies) before any dispatch, assign each specialist a `default_tier` from its frontmatter, derive `capability_scope:` (runtime-materialized for canonical roles), and write the per-phase `.guild/team/<slug>.<phase>.yaml`. TRIGGER on \"propose a team\", \"who should work on this\", \"compose specialists for the spec\", \"compose this phase's team\". DO NOT TRIGGER for: writing the code (execute-plan), creating a new specialist TYPE for Guild itself (guild:create-specialist), reviewing completed work (guild:review).",
+      "indexed": true
+    },
+    {
+      "id": "guild-wiki",
+      "source_path": "skills/knowledge/wiki/SKILL.md",
+      "tier": "knowledge",
+      "description": "Project-knowledge assembler — the one indexed entry for everything that reads or writes `.guild/wiki/`: query, ingest, lint, and decision capture. Composes its chapters by pointer (references/wiki-query.md · references/wiki-ingest.md · references/wiki-lint.md · references/decisions.md) and loads only the chapter the request needs. TRIGGER for \\\"search the wiki\\\", \\\"what did we decide about X\\\", \\\"ingest these docs\\\", \\\"lint the wiki\\\", \\\"record this decision\\\", \\\"/guild:wiki <query|ingest|lint>\\\". DO NOT TRIGGER for: building or refreshing the knowledge graph (guild-learn), reviewing code (guild-review), or reading repo source (use Grep).",
+      "indexed": true
+    },
+    {
+      "id": "init",
+      "source_path": "skills/meta/init/SKILL.md",
+      "tier": "meta",
+      "description": "Init-phase skill — onboard an existing repo or scaffold new-product knowledge; build the wiki and (brownfield) the cheap-scan CodebaseMap + a confidence-tagged architecture-map stub. The deep KnowledgeGraph + tour are lazy and gated, NOT produced at Init. Drives the /guild:init phase entrypoint.",
+      "indexed": true
+    },
+    {
+      "id": "marketing-ab-copy-variants",
+      "source_path": "skills/specialists/marketing-ab-copy-variants/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors A/B (or multivariate) copy variants with a testable hypothesis, a single changed variable, a control, sample-size math, and a pre-registered success metric. Pulled by the `marketing` specialist. TRIGGER: \"write A/B variants for the hero headline\", \"set up an A/B test on the pricing CTA\", \"draft multivariate copy for the signup page\", \"hypothesize and write variants for the email subject test\", \"run a copy test on the landing page above the fold\", \"design the test for the homepage hero\". DO NOT TRIGGER for: writing the primary control copy itself (use `copywriter-long-form` / `copywriter-product-microcopy`), a single non-tested revision, positioning changes (use `marketing-positioning`), full launch plan (use `marketing-launch-plan`), platform-native social posts (use `social-media-platform-post`), a cold outreach sequence (use `sales-cold-outreach`)."
+    },
+    {
+      "id": "marketing-campaign-brief",
+      "source_path": "skills/specialists/marketing-campaign-brief/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes a campaign brief that commissions downstream work from copywriter, social-media, and seo — tight goal, audience, message, channels, assets-needed, deadlines, and success criteria. Pulled by the `marketing` specialist. TRIGGER: \"write a campaign brief for <campaign>\", \"brief the copywriter and social-media team on the Q3 push\", \"draft the creative brief for the webinar promo\", \"commission a campaign against <theme>\", \"set up the campaign brief with goals and constraints\", \"brief the agency on the summer campaign\". DO NOT TRIGGER for: overarching positioning (use `marketing-positioning`), full launch plan across phases (use `marketing-launch-plan`), writing the campaign assets themselves (copywriter / social-media / seo groups), A/B copy variant tests (use `marketing-ab-copy-variants`), sales outreach plan (use `sales-cold-outreach`)."
+    },
+    {
+      "id": "marketing-launch-plan",
+      "source_path": "skills/specialists/marketing-launch-plan/SKILL.md",
+      "tier": "specialists",
+      "description": "Plans a product or feature launch across channels with a pre-registered metric stack, asset list, timeline (pre-launch, launch day, sustain), and per-channel owners. Pulled by the `marketing` specialist. TRIGGER: \"plan the launch for <feature>\", \"draft the GTM launch plan\", \"what's our launch timeline and channel mix\", \"build the pre-launch → sustain plan\", \"coordinate the v2 launch across channels\", \"set up the launch success metrics\". DO NOT TRIGGER for: positioning / ICP / category work (use `marketing-positioning`), a single campaign brief commissioning one piece (use `marketing-campaign-brief`), writing the announcement post itself (use `copywriter-long-form` or `social-media-platform-post`), release notes for engineers (use `technical-writer-release-notes`), sales enablement outreach (use `sales-cold-outreach`), A/B copy tests (use `marketing-ab-copy-variants`)."
+    },
+    {
+      "id": "marketing-positioning",
+      "source_path": "skills/specialists/marketing-positioning/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors a positioning statement — ICP, category frame, unique value, competitive alternatives, and a sharp \"not-for\" list. Pulled by the `marketing` specialist. TRIGGER: \"write our positioning\", \"sharpen the positioning statement\", \"define the ICP and value props\", \"position us against <competitor>\", \"what category do we compete in\", \"draft the messaging house / positioning doc\". DO NOT TRIGGER for: writing the actual page or ad copy (use `copywriter-long-form` / `copywriter-product-microcopy`), a platform-native post (use `social-media-platform-post`), keyword research (use `seo-keyword-research`), a launch timeline (use `marketing-launch-plan`), a campaign brief that commissions work (use `marketing-campaign-brief`), sales outreach copy (use `sales-cold-outreach`)."
+    },
+    {
+      "id": "mobile-android-kotlin",
+      "source_path": "skills/specialists/mobile-android-kotlin/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors idiomatic Kotlin for Android (Jetpack Compose or View system, chosen by fit), with structured coroutines, Flow / StateFlow, and leak-safe context handling. Output: Kotlin source plus Gradle / manifest notes. Pulled by the `mobile` specialist. TRIGGER: \"write the Android screen for X in Kotlin\", \"implement the Compose screen for X\", \"author the Android Fragment for X\", \"build the Android feature X\", \"Kotlin code for X\", \"add the Android-side implementation of X\". DO NOT TRIGGER for: iOS Swift code (use `mobile-ios-swift`), React Native / cross-platform (use `mobile-react-native`), mobile performance profiling (use `mobile-performance-tuning`), backend API shape (backend-api-contract), design system tokens (frontend-design), CI / Play Store release wiring (devops-ci-cd-pipeline)."
+    },
+    {
+      "id": "mobile-ios-swift",
+      "source_path": "skills/specialists/mobile-ios-swift/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors idiomatic Swift for iOS (SwiftUI or UIKit, chosen by target version and fit), with Swift Concurrency, proper main-actor isolation, and no force-unwraps. Output: Swift source files plus a build-notes section for SPM / Xcode integration. Pulled by the `mobile` specialist. TRIGGER: \"write the iOS screen for X in Swift\", \"implement the SwiftUI view for X\", \"author the UIKit controller for X\", \"build the iOS feature X\", \"Swift code for X\", \"add the iOS-side implementation of X\". DO NOT TRIGGER for: Android code (use `mobile-android-kotlin`), React Native / cross-platform (use `mobile-react-native`), mobile performance profiling (use `mobile-performance-tuning`), backend API contract (backend-api-contract), design system visual spec (frontend-design), CI/CD for the iOS build (devops-ci-cd-pipeline)."
+    },
+    {
+      "id": "mobile-performance-tuning",
+      "source_path": "skills/specialists/mobile-performance-tuning/SKILL.md",
+      "tier": "specialists",
+      "description": "Profiles and optimizes mobile apps — startup, scroll jank, memory, battery — with before/after metrics on real devices. Output: instrument plan, baseline, fix list, post-fix metrics. Pulled by the `mobile` specialist. TRIGGER: \"profile the app's cold-start time\", \"the scroll is janky on X screen\", \"optimize memory on Y screen\", \"mobile performance audit of X\", \"why is the app slow on low-end devices\", \"reduce battery usage on X feature\". DO NOT TRIGGER for: writing the feature in Swift (use `mobile-ios-swift`), Kotlin (use `mobile-android-kotlin`), or RN (use `mobile-react-native`); backend latency work (backend group); CI build-time optimization (devops-ci-cd-pipeline); observability of app telemetry in prod (devops-observability-setup); QA test-strategy definition (qa-test-strategy)."
+    },
+    {
+      "id": "mobile-react-native",
+      "source_path": "skills/specialists/mobile-react-native/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors React Native / Expo components with platform-aware behavior, minimal JS-bridge traffic, and native-module notes where required. Output: TypeScript source for the component plus notes on any native modules / platform code. Pulled by the `mobile` specialist. TRIGGER: \"write the React Native screen for X\", \"build the Expo component for X\", \"author the RN feature for X\", \"cross-platform mobile screen for X\", \"implement X in React Native for iOS and Android\", \"RN component for X with platform-specific behavior\". DO NOT TRIGGER for: pure iOS Swift (use `mobile-ios-swift`), pure Android Kotlin (use `mobile-android-kotlin`), performance profiling (use `mobile-performance-tuning`), backend API design (backend-api-contract), design system authoring (frontend-design), OTA update / EAS build infra (devops-ci-cd-pipeline)."
+    },
+    {
+      "id": "qa-flaky-test-hunter",
+      "source_path": "skills/specialists/qa-flaky-test-hunter/SKILL.md",
+      "tier": "specialists",
+      "description": "Diagnoses flaky tests — classifies the cause (timing / ordering / resource / external), quarantines the test safely, and lays out a fix plan. Output: per-test flakiness report, quarantine list, and remediation plan. Pulled by the `qa` specialist. TRIGGER: \"this test is flaky\", \"diagnose why X keeps failing intermittently\", \"hunt down the flaky tests in X\", \"why does X pass locally but fail on CI\", \"quarantine the flaky tests in X\", \"investigate the intermittent failures in X\". DO NOT TRIGGER for: picking test shapes for a new feature (use `qa-test-strategy`), authoring property-based tests (use `qa-property-based-tests`), writing snapshot tests (use `qa-snapshot-tests`), fixing an application bug exposed by a test (owning service group), CI runner capacity tuning (devops-infrastructure-as-code), observability of prod flakiness (devops-observability-setup)."
+    },
+    {
+      "id": "qa-property-based-tests",
+      "source_path": "skills/specialists/qa-property-based-tests/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors property-based tests (Hypothesis / fast-check / proptest / QuickCheck) for a target function or module — invariants, generators, shrink strategies. Output: a property-test module plus generator definitions. Pulled by the `qa` specialist. TRIGGER: \"write property-based tests for X\", \"add Hypothesis tests to X\", \"fast-check properties for X\", \"author proptest cases for X\", \"what invariants should we test for X\", \"add fuzz-style properties for X\". DO NOT TRIGGER for: deciding whether the feature needs property tests at all (use `qa-test-strategy`), writing snapshot tests (use `qa-snapshot-tests`), diagnosing flaky tests (use `qa-flaky-test-hunter`), example-based unit tests (owning service group), security fuzzing of untrusted inputs (security-threat-modeling), performance benchmarks (mobile-performance-tuning)."
+    },
+    {
+      "id": "qa-snapshot-tests",
+      "source_path": "skills/specialists/qa-snapshot-tests/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors snapshot tests with governance — what to snapshot, granularity, update-review policy, and rot prevention. Output: a snapshot test suite plus a short update-review policy doc. Pulled by the `qa` specialist. TRIGGER: \"add snapshot tests for X\", \"snapshot test the rendered X\", \"author Jest snapshots for X\", \"write golden-file tests for X\", \"capture the output shape of X as a snapshot\", \"set up inline snapshots for X\". DO NOT TRIGGER for: test-strategy selection (use `qa-test-strategy`), property-based tests (use `qa-property-based-tests`), flaky-test diagnosis (use `qa-flaky-test-hunter`), UI visual regression via screenshots (mobile / frontend group owns), end-to-end behavior tests (owning service group), API contract specification (backend-api-contract)."
+    },
+    {
+      "id": "qa-test-strategy",
+      "source_path": "skills/specialists/qa-test-strategy/SKILL.md",
+      "tier": "specialists",
+      "description": "Picks the test shapes (unit / integration / e2e / contract) for a feature, sets coverage targets per layer, and captures the matrix. Output: `test-strategy.md` plus a coverage-target matrix that downstream test writers implement. Pulled by the `qa` specialist. TRIGGER: \"what tests do we need for X\", \"design the test strategy for X\", \"pick the test types for X\", \"draft the coverage plan for X\", \"how should we test X\", \"decide the test pyramid for X\". DO NOT TRIGGER for: writing property-based tests (use `qa-property-based-tests`), authoring snapshot tests (use `qa-snapshot-tests`), diagnosing flaky tests (use `qa-flaky-test-hunter`), writing the actual implementation tests file (backend / mobile groups own those), CI/CD pipeline shape (devops-ci-cd-pipeline), acceptance criteria authored by product."
+    },
+    {
+      "id": "researcher-comparison-table",
+      "source_path": "skills/specialists/researcher-comparison-table/SKILL.md",
+      "tier": "specialists",
+      "description": "Produces an N-option comparison table — libraries, vendors, frameworks, models — with named axes, cell rationale, and takeaways. Output: markdown table + 3–5 bullet takeaways + source list. Pulled by the `researcher` specialist. TRIGGER: \"compare these five libraries\", \"side-by-side of X vs Y vs Z\", \"give me a comparison table of the top options for X\", \"evaluate these vendors for X\", \"which of these frameworks fits us best\", \"benchmark these options on cost and features\". DO NOT TRIGGER for: scoring two *project-internal* architecture options for this codebase (use `architect-tradeoff-matrix`), open-ended topic research with multiple sources (use `researcher-deep-dive`), summarizing a single paper (use `researcher-paper-digest`), generating copy for a comparison landing page (copywriter-long-form or seo)."
+    },
+    {
+      "id": "researcher-deep-dive",
+      "source_path": "skills/specialists/researcher-deep-dive/SKILL.md",
+      "tier": "specialists",
+      "description": "Produces a structured research brief on a topic — key findings, sources, confidence-per-claim, open questions. Output: `.guild/runs/<run-id>/research/<slug>.md`. Pulled by the `researcher` specialist. TRIGGER: \"research X\", \"do a deep dive on X\", \"what's the state of the art on X\", \"give me a research brief on X\", \"investigate X and summarize findings\", \"gather sources on X\". DO NOT TRIGGER for: summarizing a single known paper (use `researcher-paper-digest`), N-option side-by-side comparison (use `researcher-comparison-table`), architecture decision capture (architect-adr-writer), scoring two architecture options for a specific project choice (architect-tradeoff-matrix), generating marketing/SEO keyword lists (seo group)."
+    },
+    {
+      "id": "researcher-paper-digest",
+      "source_path": "skills/specialists/researcher-paper-digest/SKILL.md",
+      "tier": "specialists",
+      "description": "Summarizes a single academic paper or long-form article with a critical read — Problem / Approach / Results / Limitations / Relevance. Output: `.guild/runs/<run-id>/research/digests/<slug>.md`. Pulled by the `researcher` specialist. TRIGGER: \"summarize this paper\", \"digest this arxiv link\", \"what does this paper say\", \"give me the TL;DR on this PDF\", \"break down this research article\", \"read this whitepaper and summarize\". DO NOT TRIGGER for: open-ended topic research spanning multiple sources (use `researcher-deep-dive`), N-way option comparison (use `researcher-comparison-table`), rewriting the paper as marketing copy (copywriter), producing user-facing docs from it (technical-writer), technical blog post from the paper (copywriter-long-form)."
+    },
+    {
+      "id": "sales-cold-outreach",
+      "source_path": "skills/specialists/sales-cold-outreach/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes cold outbound sequences (email + LinkedIn) targeted to a named ICP, with per-step copy, cadence, triggers, and a stated value hypothesis per touch. Pulled by the `sales` specialist. TRIGGER: \"write a cold outreach sequence to <ICP>\", \"draft the cold email + LinkedIn cadence for <segment>\", \"build a prospecting sequence for the new product\", \"write outbound to VP Finance accounts\", \"design the 7-touch cold sequence\", \"draft the LinkedIn connect + follow-up for enterprise accounts\". DO NOT TRIGGER for: lifecycle / onboarding / drip emails to existing users (use `copywriter-email-sequences`), post-meeting or post-proposal follow-up (use `sales-follow-up-sequence`), a proposal document (use `sales-proposal-writer`), a discovery-call framework (use `sales-discovery-framework`), a launch plan (use `marketing-launch-plan`)."
+    },
+    {
+      "id": "sales-discovery-framework",
+      "source_path": "skills/specialists/sales-discovery-framework/SKILL.md",
+      "tier": "specialists",
+      "description": "Designs a discovery-call framework — stage-gated question sets, qualification scoring, disqualification criteria, and next-step decision rules. Pulled by the `sales` specialist. TRIGGER: \"design the discovery call framework\", \"build the discovery questions and scoring\", \"write a MEDDIC/SPICED/BANT-style qualification guide\", \"draft the qualification + disqualify criteria\", \"set up the discovery script for the AE team\", \"what should reps ask on discovery calls\". DO NOT TRIGGER for: cold outreach to book the call (use `sales-cold-outreach`), post-meeting follow-up (use `sales-follow-up-sequence`), the proposal after qualification (use `sales-proposal-writer`), product demo script (separate concern — treat as product enablement), positioning or ICP work (use `marketing-positioning`)."
+    },
+    {
+      "id": "sales-follow-up-sequence",
+      "source_path": "skills/specialists/sales-follow-up-sequence/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes post-meeting and post-proposal follow-up cadences — triggered touches with per-step copy, value-add hooks, disposition rules, and a clean exit path. Pulled by the `sales` specialist. TRIGGER: \"write the follow-up sequence after the discovery call\", \"draft the post-proposal follow-up cadence\", \"build the nudge sequence for stalled deals\", \"design the follow-up + break-up emails\", \"write the post-demo follow-up\", \"set up the follow-up rules for no-reply after proposal\". DO NOT TRIGGER for: cold outreach to brand-new prospects (use `sales-cold-outreach`), lifecycle / drip emails to existing customers (use `copywriter-email-sequences`), the discovery framework itself (use `sales-discovery-framework`), the proposal document (use `sales-proposal-writer`), launch announcements (use `marketing-launch-plan`), re-engagement of dormant product users (use `copywriter-email-sequences`)."
+    },
+    {
+      "id": "sales-proposal-writer",
+      "source_path": "skills/specialists/sales-proposal-writer/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes sales proposals — scope, deliverables, pricing, terms, assumptions, decision criteria, and clear next steps. Pulled by the `sales` specialist. TRIGGER: \"write a proposal for <account>\", \"draft the SOW / proposal for the Acme deal\", \"build the pricing + scope proposal\", \"write the renewal / expansion proposal\", \"draft the decision-criteria summary in the proposal\", \"put together the commercial proposal for <prospect>\". DO NOT TRIGGER for: cold outreach before qualification (use `sales-cold-outreach`), discovery framework (use `sales-discovery-framework`), post-proposal follow-up cadence (use `sales-follow-up-sequence`), technical API documentation or integration guide (use `technical-writer-api-docs` / `technical-writer-tutorial`), contract redlines and MSA terms (legal, not this skill), launch or campaign planning (marketing group)."
+    },
+    {
+      "id": "security-auth-flow-review",
+      "source_path": "skills/specialists/security-auth-flow-review/SKILL.md",
+      "tier": "specialists",
+      "description": "Reviews an authentication / authorization flow (OAuth2 / OIDC / session / token / SAML) — threat-maps the flow, finds weaknesses, lists fixes. Output: `auth-review.md` with step-by-step flow, threat map, and remediation. Pulled by the `security` specialist. TRIGGER: \"review the auth flow for X\", \"audit the OAuth implementation in X\", \"security review of the login flow\", \"check the session handling in X\", \"audit the token lifecycle of X\", \"review the OIDC integration with X\". DO NOT TRIGGER for: writing the auth flow from scratch (backend group owns), general threat modeling across a service (use `security-threat-modeling`), dependency CVE audit (use `security-dependency-audit`), secret scanning (use `security-secrets-scan`), UX of the sign-in screen (frontend-design / mobile group), compliance attestation only."
+    },
+    {
+      "id": "security-dependency-audit",
+      "source_path": "skills/specialists/security-dependency-audit/SKILL.md",
+      "tier": "specialists",
+      "description": "Audits dependencies for CVEs, license risk, and transitive exposure; writes a remediation plan with ownership. Output: audit report (per package: CVE / license / fix status) plus a patch plan. Pulled by the `security` specialist. TRIGGER: \"audit dependencies for CVEs in X\", \"dependency security review of X\", \"check package vulnerabilities in X\", \"license audit of X\", \"SCA scan for X\", \"find vulnerable libraries in X\". DO NOT TRIGGER for: threat modeling the application (use `security-threat-modeling`), auth-flow review (use `security-auth-flow-review`), secret scanning (use `security-secrets-scan`), picking dependencies during architecture (architect-tradeoff-matrix), general upgrade work (backend / mobile group), observability of runtime risk (devops-observability-setup)."
+    },
+    {
+      "id": "security-secrets-scan",
+      "source_path": "skills/specialists/security-secrets-scan/SKILL.md",
+      "tier": "specialists",
+      "description": "Scans repo and build artifacts for leaked secrets (keys, tokens, certs) and proposes a prevention policy — pre-commit hooks, CI check, rotation plan. Output: findings report, remediation steps (rotate / revoke / invalidate), and hook/CI proposals. Pulled by the `security` specialist. TRIGGER: \"scan the repo for leaked secrets\", \"check for exposed API keys in X\", \"secret-scan the X artifact\", \"audit git history for credentials\", \"find leaked tokens in X\", \"set up leak-prevention hooks for X\". DO NOT TRIGGER for: dependency CVE audit (use `security-dependency-audit`), threat modeling (use `security-threat-modeling`), auth-flow audit (use `security-auth-flow-review`), vault / KMS provisioning (use `devops-infrastructure-as-code`), general infra hardening (devops group), CI pipeline structure (devops-ci-cd-pipeline)."
+    },
+    {
+      "id": "security-threat-modeling",
+      "source_path": "skills/specialists/security-threat-modeling/SKILL.md",
+      "tier": "specialists",
+      "description": "Runs a STRIDE-style threat model on a component — assets, entry points, trust boundaries, threats, mitigations — with each threat anchored to an owner and a ticket. Output: `threat-model.md` with the full asset / boundary / threat table. Pulled by the `security` specialist. TRIGGER: \"threat-model the new X\", \"STRIDE analysis of the X service\", \"run a threat model on X\", \"identify the attack surface of X\", \"what are the security threats to X\", \"map trust boundaries for X\". DO NOT TRIGGER for: scanning dependencies for CVEs (use `security-dependency-audit`), auditing an auth flow (use `security-auth-flow-review`), scanning repo for secrets (use `security-secrets-scan`), general architecture design (architect-systems-design), incident response playbook (devops-incident-runbook), compliance checklist only."
+    },
+    {
+      "id": "seo-internal-linking",
+      "source_path": "skills/specialists/seo-internal-linking/SKILL.md",
+      "tier": "specialists",
+      "description": "Plans an internal-link structure — link graph across pillars/clusters, anchor-text variance, orphan-page fixes, sitewide nav vs in-content links, link-equity flow. Output: link graph + recommendations. Pulled by the `seo` specialist. TRIGGER: \"plan our internal linking structure\", \"fix orphan pages\", \"map the internal-link graph for the blog hub\", \"recommend internal links between the new cluster pages\", \"audit and redesign the internal-link structure\", \"route link equity to our priority pages\". DO NOT TRIGGER for: backlink/external-link strategy (that's off-site SEO, outside this roster), keyword discovery (use `seo-keyword-research`), single-page on-page links as part of a broader on-page pass (use `seo-on-page-optimization`), technical crawl audit (use `seo-technical-audit`), information architecture redesign of a product app (that's product/design, not SEO), blog editorial planning (copywriter-long-form)."
+    },
+    {
+      "id": "seo-keyword-research",
+      "source_path": "skills/specialists/seo-keyword-research/SKILL.md",
+      "tier": "specialists",
+      "description": "Identifies target keywords with search intent, volume, difficulty, and SERP feature notes; clusters them into topics; produces a content gap analysis against current pages. Pulled by the `seo` specialist. TRIGGER: \"do keyword research for X\", \"find target keywords for the new category\", \"build a keyword cluster map for Y\", \"run a content gap analysis\", \"identify search opportunities for the /pricing topic\", \"what keywords should we target for the docs hub\". DO NOT TRIGGER for: on-page optimization of a specific URL (use `seo-on-page-optimization`), crawl / CWV / indexation audit (use `seo-technical-audit`), internal linking graph (use `seo-internal-linking`), writing the actual content (copywriter-long-form or technical-writer group), paid-search keyword lists (marketing/sales paid media, not organic SEO)."
+    },
+    {
+      "id": "seo-on-page-optimization",
+      "source_path": "skills/specialists/seo-on-page-optimization/SKILL.md",
+      "tier": "specialists",
+      "description": "Optimizes a specific page — title tag, meta description, H1/H2 hierarchy, URL slug, schema.org markup, internal links, image alt text, content depth against SERP intent. Output: before/after diff + checklist. Pulled by the `seo` specialist. TRIGGER: \"optimize the /pricing page for SEO\", \"rewrite the title and meta for X\", \"add schema markup to Y\", \"run on-page SEO on this URL\", \"improve SERP appearance for page Z\", \"audit and fix the on-page for /features/export\". DO NOT TRIGGER for: discovering new keywords (use `seo-keyword-research`), site-wide crawl/CWV audit (use `seo-technical-audit`), site-wide internal-link graph (use `seo-internal-linking`), writing the page content from scratch (copywriter-long-form or technical-writer group), page speed deep-dive (seo-technical-audit or engineering), A/B testing meta-description variants for CTR (marketing-ab-copy-variants)."
+    },
+    {
+      "id": "seo-technical-audit",
+      "source_path": "skills/specialists/seo-technical-audit/SKILL.md",
+      "tier": "specialists",
+      "description": "Audits technical SEO health — crawlability, robots/sitemaps, indexation, canonicals, redirects, Core Web Vitals (mobile first), hreflang, HTTPS, JS rendering. Output: severity-tagged findings with owner assignment. Pulled by the `seo` specialist. TRIGGER: \"run a technical SEO audit\", \"audit crawlability and indexation\", \"check our Core Web Vitals and fix owners\", \"review canonicals and redirects across the site\", \"audit robots.txt and sitemaps\", \"run a technical crawl and report on severity\". DO NOT TRIGGER for: keyword discovery (use `seo-keyword-research`), single-page on-page optimization (use `seo-on-page-optimization`), internal-linking strategy (use `seo-internal-linking`), application performance profiling (engineering/devops observability), a11y audit (separate concern, not in roster), security audit (security group), content audits for editorial quality (copywriter group)."
+    },
+    {
+      "id": "social-media-content-calendar",
+      "source_path": "skills/specialists/social-media-content-calendar/SKILL.md",
+      "tier": "specialists",
+      "description": "Builds a content calendar across platforms — dated entries with platform, topic, format, owner, status, cross-pollination notes, and weekly themes. Output: calendar.md or YAML. Pulled by the `social-media` specialist. TRIGGER: \"build a content calendar for next month\", \"plan the social calendar across Twitter/LinkedIn/IG\", \"draft a 6-week content calendar\", \"map out launch week social\", \"plan weekly content themes\", \"create the editorial calendar for social\". DO NOT TRIGGER for: a single post (use `social-media-platform-post`), a thread (use `social-media-thread`), engagement/reply templates (use `social-media-engagement-templates`), blog editorial calendar for long-form (copywriter-long-form handles long-form; this skill is social-native), launch-plan PR/campaign strategy (marketing-launch-plan), SEO content gap mapping (seo-keyword-research)."
+    },
+    {
+      "id": "social-media-engagement-templates",
+      "source_path": "skills/specialists/social-media-engagement-templates/SKILL.md",
+      "tier": "specialists",
+      "description": "Builds a reusable reply / DM / comment template library for community management — tagged by use-case (welcome, feature request, complaint, praise, press inquiry, outage), with personalization slots and escalation rules. Pulled by the `social-media` specialist. TRIGGER: \"draft reply templates for community managers\", \"build a DM template library\", \"write canned replies for common support tickets on social\", \"create engagement templates for our CX team\", \"draft the complaint-reply playbook\", \"write templates for handling feature requests on Twitter\". DO NOT TRIGGER for: a single post (use `social-media-platform-post`), a thread (use `social-media-thread`), calendar planning (use `social-media-content-calendar`), support-ticket macros inside a help desk (that's a support-ops concern, not social), sales outreach or follow-up (sales group), lifecycle email copy (copywriter-email-sequences)."
+    },
+    {
+      "id": "social-media-platform-post",
+      "source_path": "skills/specialists/social-media-platform-post/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes a single platform-native post — Twitter/X, LinkedIn, Instagram, Threads, Bluesky — with post copy matched to platform norms, a media plan (image/video spec), and hashtag set. Pulled by the `social-media` specialist. TRIGGER: \"write a tweet about X\", \"draft a LinkedIn post on Y\", \"write an Instagram caption for the product shot\", \"draft a Threads post announcing Z\", \"write a platform-native post for X\", \"draft the Bluesky post\". DO NOT TRIGGER for: multi-post threads or carousels (use `social-media-thread`), reply/DM templates for community management (use `social-media-engagement-templates`), multi-week calendar planning (use `social-media-content-calendar`), long-form blog copy (copywriter-long-form), launch announcement strategy (marketing-launch-plan), SEO meta/title tags (seo-on-page-optimization)."
+    },
+    {
+      "id": "social-media-thread",
+      "source_path": "skills/specialists/social-media-thread/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes a multi-post thread or carousel — Twitter/X threads, LinkedIn carousels, Threads chains, Instagram carousels — with thread outline, a hook that earns the click, per-post copy, and a closing CTA. Pulled by the `social-media` specialist. TRIGGER: \"write a Twitter thread on X\", \"draft a LinkedIn carousel about Y\", \"turn this into a 10-post thread\", \"write a carousel explaining Z\", \"write a thread walking through the decision\", \"draft the LinkedIn carousel slides\". DO NOT TRIGGER for: single posts (use `social-media-platform-post`), reply/DM templates (use `social-media-engagement-templates`), calendar planning (use `social-media-content-calendar`), long-form blog posts (copywriter-long-form), user-facing tutorial docs (technical-writer-tutorial), sales follow-up sequences (sales-follow-up-sequence)."
+    },
+    {
+      "id": "technical-writer-api-docs",
+      "source_path": "skills/specialists/technical-writer-api-docs/SKILL.md",
+      "tier": "specialists",
+      "description": "Documents an existing API contract — reference pages per endpoint, example requests/responses, error table, auth section, pagination rules, versioning notes. Reads the source spec (OpenAPI/SDL/code); never invents endpoints. Pulled by the `technical-writer` specialist. TRIGGER: \"write the API docs for X\", \"document the /orders endpoints\", \"turn this OpenAPI spec into reference docs\", \"write the API reference page for X\", \"document the error codes returned by X\", \"write the developer docs for the Y API\". DO NOT TRIGGER for: designing the API contract itself (use `backend-api-contract` — backend owns the contract, tech-writer documents it), writing a getting-started walkthrough (use `technical-writer-tutorial`), user-facing product manual (use `technical-writer-user-manual`), release notes / changelogs (use `technical-writer-release-notes`), marketing copy about the API (copywriter-long-form), SDK-sales outreach (sales group)."
+    },
+    {
+      "id": "technical-writer-release-notes",
+      "source_path": "skills/specialists/technical-writer-release-notes/SKILL.md",
+      "tier": "specialists",
+      "description": "Authors release notes / changelog entries for a version — grouped as Added / Changed / Fixed / Deprecated / Removed / Security, with breaking-change callouts and upgrade notes. Pulled by the `technical-writer` specialist. TRIGGER: \"write the release notes for v2.4\", \"draft the changelog entry for this release\", \"document what's new in version Y\", \"write the upgrade notes for the breaking change in X\", \"summarize this PR set into release notes\". DO NOT TRIGGER for: marketing launch announcements (use `marketing-launch-plan`), blog posts about a release (use `copywriter-long-form`), API reference updates (use `technical-writer-api-docs`), user manual updates (use `technical-writer-user-manual`), tutorial updates (use `technical-writer-tutorial`), social post announcing the release (social-media-platform-post)."
+    },
+    {
+      "id": "technical-writer-tutorial",
+      "source_path": "skills/specialists/technical-writer-tutorial/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes a walk-through tutorial — getting-started, first-project, end-to-end integration — with numbered steps, expected output per step, and a troubleshooting section. Pulled by the `technical-writer` specialist. TRIGGER: \"write a getting-started tutorial for X\", \"write the quickstart guide\", \"walk a new developer through integrating Y\", \"write the first-project tutorial\", \"create a step-by-step how-to for Z\", \"write a hands-on walkthrough\". DO NOT TRIGGER for: reference docs for every endpoint (use `technical-writer-api-docs`), task-based user manual pages (use `technical-writer-user-manual`), release notes (use `technical-writer-release-notes`), designing the onboarding UX (product/design scope, not this skill), marketing content explaining why to use the product (copywriter-long-form)."
+    },
+    {
+      "id": "technical-writer-user-manual",
+      "source_path": "skills/specialists/technical-writer-user-manual/SKILL.md",
+      "tier": "specialists",
+      "description": "Writes user-facing product documentation — task-based pages organized around what a user is trying to do, with steps, screenshots, caveats, and a glossary. Pulled by the `technical-writer` specialist. TRIGGER: \"write the user manual for X\", \"document how to use feature Y\", \"write the help-center article for Z\", \"create the product documentation for the admin console\", \"write the user guide section on settings\", \"document the workflow for onboarding new users\". DO NOT TRIGGER for: API reference docs (use `technical-writer-api-docs`), step-by-step getting-started walkthrough (use `technical-writer-tutorial`), release notes (use `technical-writer-release-notes`), marketing or persuasive product copy (copywriter-long-form), in-product string/button copy (copywriter-product-microcopy), landing page (copywriter-long-form or marketing group)."
+    },
+    {
+      "id": "using-guild",
+      "source_path": "skills/meta/using-guild/SKILL.src.md",
+      "tier": "meta",
+      "description": "Mandatory first-read gateway to Guild — the specialist-team workflow engine installed in this repo. Read BEFORE any non-trivial software task to decide whether Guild's lifecycle (plan → build → qa → ops), specialist teams, review gate, structured debugging, or knowledge recall fits. It also carries Guild's five operating principles, which every specialist follows. TRIGGER on \"plan/scope/design this feature\", \"review this plan or PR\", \"build this with a team\", \"use specialists\", \"debug this failing system\", \"release/deploy/roll back this\", \"ingest these docs into the wiki\", \"what are Guild's principles\", or any multi-step / multi-file / multi-agent job — even when the user never types a /guild command. It says WHEN to reach for Guild and WHERE the surface lives; it does NOT list every command. DO NOT TRIGGER when you are a narrow subagent handed one fully-scoped task with full context (single-file edit, typo fix, rename, value lookup) — just do the work.",
+      "indexed": true
+    }
+  ],
+  "agents": [
+    {
+      "id": "advisor",
+      "source_path": "agents/advisor.md",
+      "description": "The on-demand `powerful` supervisor a stuck low-tier agent consults. Answers EXACTLY ONE escalated sub-question, seeing only the draft + question + a compact critique instruction — NEVER the raw file/project context (that withholding keeps the call cheap). Returns a `guild.handoff.v2` envelope; the cheap/mid agent continues with the answer folded in. The §3 advisor-escalation net (cost-aware-tiering ADR), NOT a standalone reviewer (O-1: no reviewer type ships). TRIGGER only via escalation: an agent emits `status: escalate` + `escalate_reason`, OR the coordinator detects an uncertainty marker / short output and routes one sub-question here. DO NOT TRIGGER for: a fresh task lane (developer/backend/frontend/mobile); a systems-design or ADR pass (architect designs, advisor critiques a slice); G6 receipt review (guild:review); the quality gate (guild:guild-quality); whole-transcript review or wholesale re-runs; direct use as a general critic. The advisor sees a draft + a question, never a repo."
+    },
+    {
+      "id": "context-manager",
+      "source_path": "agents/context-manager.md",
+      "description": "The `mid`-tier installed machinery agent that ASSEMBLES bounded context and emits run-scoped capability evidence — the executor for Learn's semantic operations and for per-lane context bundles, so a project-local role is never also the thing that assembles its own context. Writes ONLY under `.guild/context/**`, `.guild/artifacts/**`, `.guild/runs/**`; its contract (`scripts/lib/capability/context-manager-contract.ts`) forbids the rest structurally. TRIGGER for \\\"assemble the context bundle for this lane\\\", \\\"run the Learn semantic stage\\\", \\\"emit the capability profile\\\", \\\"resolve this recall query\\\", \\\"summarize this feedstock into a bundle\\\". DO NOT TRIGGER for: writing agent or skill definitions (guild:create-specialist / guild:create-skill, human-gated); promoting knowledge to the wiki (guild:wiki-ingest, human gate); approving a capability candidate or advancing the resolver mode (operator only); deciding a project question (architect designs, advisor critiques, the operator decides); implementing a task lane (developer / domain specialists); reviewing work (guild:review). It assembles evidence and never exercises authority over it."
+    },
+    {
+      "id": "developer",
+      "source_path": "agents/developer.md",
+      "description": "The generic `mid`-tier task-lane implementer: takes a settled plan lane and writes/refactors its code (draft, reason, build), escalating to the advisor when above its tier. The default ephemeral worker for implementation lanes that are NOT domain-recognizable. TRIGGER for \\\"implement this lane\\\", \\\"build this task\\\", \\\"write the code for X\\\", \\\"refactor this module\\\" where the work has no clear domain home. DO NOT TRIGGER for: API/data-layer/migrations/integrations/queue/worker code (backend); web frontend (frontend); iOS/Android/RN/Expo (mobile); systems design, tradeoffs, ADRs (architect — developer implements after the design); test strategy / suite shape (qa — developer writes pinning tests only); deploy/CI/CD/IaC/observability (devops); security audits, threat models, auth review (security); content/commercial work (writing/commercial groups); skill/hook/command authoring — dev-team. If a lane is domain-recognizable, hand off, not absorb. A `powerful` need escalates to advisor, never self-promote."
+    },
+    {
+      "id": "team-lead",
+      "source_path": "agents/team-lead.md",
+      "description": "The per-TaskCell lead (KTD19 tier T1): owns ONE TaskCell, dispatches its specialists, reads their `guild.handoff.v2` receipts, and reports upward ONLY as `guild.goal_status.v1` (last 5 events plus a rolling summary). Structural isolation — specialists never message the orchestrator or each other, and the orchestrator never sees a specialist transcript. TRIGGER when a lifecycle phase opens a TaskCell that needs more than one specialist, or when a cell's lanes must be sequenced, re-dispatched, or rolled up. DO NOT TRIGGER for: the T0 session itself (bare /guild is T0, and T0 never becomes a lead); implementing a lane (developer or a domain specialist); critiquing one draft sub-question (advisor); assembling a context bundle (context-manager); reviewing receipts at the phase gate (the review assembler)."
+    }
+  ],
+  "hooks": [
+    {
+      "id": "PostToolUse:capture-telemetry.js",
+      "source_path": "hooks/dist/capture-telemetry.js",
+      "event": "PostToolUse",
+      "matcher": "*"
+    },
+    {
+      "id": "PostToolUse:comms-format-lint.js",
+      "source_path": "hooks/dist/comms-format-lint.js",
+      "event": "PostToolUse",
+      "matcher": "Write|Edit"
+    },
+    {
+      "id": "PostToolUse:gate-outcome-writer.js",
+      "source_path": "hooks/dist/gate-outcome-writer.js",
+      "event": "PostToolUse",
+      "matcher": "Write|Edit"
+    },
+    {
+      "id": "PostToolUse:post-tool-use.js",
+      "source_path": "hooks/dist/post-tool-use.js",
+      "event": "PostToolUse",
+      "matcher": "*"
+    },
+    {
+      "id": "PreCompact:pre-compact.js",
+      "source_path": "hooks/dist/pre-compact.js",
+      "event": "PreCompact"
+    },
+    {
+      "id": "PreToolUse:pre-tool-use.js",
+      "source_path": "hooks/dist/pre-tool-use.js",
+      "event": "PreToolUse",
+      "matcher": "*"
+    },
+    {
+      "id": "SessionStart:bootstrap.sh",
+      "source_path": "hooks/bootstrap.sh",
+      "event": "SessionStart"
+    },
+    {
+      "id": "SessionStart:detect-guild-version.js",
+      "source_path": "hooks/dist/detect-guild-version.js",
+      "event": "SessionStart"
+    },
+    {
+      "id": "SessionStart:session-reanchor.js",
+      "source_path": "hooks/dist/session-reanchor.js",
+      "event": "SessionStart"
+    },
+    {
+      "id": "SessionStart:update-check.js",
+      "source_path": "hooks/dist/update-check.js",
+      "event": "SessionStart"
+    },
+    {
+      "id": "SessionStart:using-guild-bootstrap.js",
+      "source_path": "hooks/dist/using-guild-bootstrap.js",
+      "event": "SessionStart"
+    },
+    {
+      "id": "Stop:lean-lead-guard.js",
+      "source_path": "hooks/dist/lean-lead-guard.js",
+      "event": "Stop"
+    },
+    {
+      "id": "Stop:learning-backstop.js",
+      "source_path": "hooks/dist/learning-backstop.js",
+      "event": "Stop"
+    },
+    {
+      "id": "Stop:lifecycle-gate.js",
+      "source_path": "hooks/dist/lifecycle-gate.js",
+      "event": "Stop"
+    },
+    {
+      "id": "Stop:maybe-reflect.js",
+      "source_path": "hooks/dist/maybe-reflect.js",
+      "event": "Stop"
+    },
+    {
+      "id": "Stop:run-trace-close.js",
+      "source_path": "hooks/dist/run-trace-close.js",
+      "event": "Stop"
+    },
+    {
+      "id": "SubagentStop:capture-telemetry.js",
+      "source_path": "hooks/dist/capture-telemetry.js",
+      "event": "SubagentStop"
+    },
+    {
+      "id": "SubagentStop:maybe-reflect.js",
+      "source_path": "hooks/dist/maybe-reflect.js",
+      "event": "SubagentStop"
+    },
+    {
+      "id": "TaskCompleted:task-completed.js",
+      "source_path": "hooks/agent-team/dist/task-completed.js",
+      "event": "TaskCompleted"
+    },
+    {
+      "id": "TaskCreated:task-created.js",
+      "source_path": "hooks/agent-team/dist/task-created.js",
+      "event": "TaskCreated"
+    },
+    {
+      "id": "TeammateIdle:teammate-idle.js",
+      "source_path": "hooks/agent-team/dist/teammate-idle.js",
+      "event": "TeammateIdle"
+    },
+    {
+      "id": "UserPromptSubmit:capture-telemetry.js",
+      "source_path": "hooks/dist/capture-telemetry.js",
+      "event": "UserPromptSubmit"
+    },
+    {
+      "id": "UserPromptSubmit:check-skill-coverage.sh",
+      "source_path": "hooks/check-skill-coverage.sh",
+      "event": "UserPromptSubmit"
+    },
+    {
+      "id": "UserPromptSubmit:run-trace-start.js",
+      "source_path": "hooks/dist/run-trace-start.js",
+      "event": "UserPromptSubmit"
+    }
+  ],
+  "mcp_servers": [
+    {
+      "id": "guild-memory",
+      "source_path": ".mcp.json",
+      "transport": "stdio",
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/runtime/guild-mcp.js",
+        "wiki"
+      ],
+      "read_only": true,
+      "description": "D-MCP declared capability (docs/v2/security.html §MCP trust surface). Definition-file field, not a guild.* contract. /guild:audit validates declaration vs observed egress; undeclared egress/write is a violation."
+    },
+    {
+      "id": "guild-telemetry",
+      "source_path": ".mcp.json",
+      "transport": "stdio",
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/runtime/guild-mcp.js",
+        "trace"
+      ],
+      "read_only": true,
+      "description": "D-MCP declared capability (docs/v2/security.html §MCP trust surface). Definition-file field, not a guild.* contract. /guild:audit validates declaration vs observed egress; undeclared egress/write is a violation."
+    }
+  ],
+  "scripts": [
+    {
+      "id": "activated-host-conformance",
+      "source_path": "scripts/activated-host-conformance.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "advisory-record-example",
+      "source_path": "scripts/advisory-record-example.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "agent-team-launcher",
+      "source_path": "scripts/agent-team-launcher.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "analyze-runs",
+      "source_path": "scripts/analyze-runs.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "audit-run-sinks",
+      "source_path": "scripts/audit-run-sinks.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "build-host-packages",
+      "source_path": "scripts/build-host-packages.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "build-inventory",
+      "source_path": "scripts/build-inventory.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "build-release-candidate",
+      "source_path": "scripts/build-release-candidate.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "build-verify",
+      "source_path": "scripts/build-verify.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "capability-adopt",
+      "source_path": "scripts/capability-adopt.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "capability-migration-boundary",
+      "source_path": "scripts/capability-migration-boundary.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "capability-profile",
+      "source_path": "scripts/capability-profile.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "check-bundle-determinism",
+      "source_path": "scripts/check-bundle-determinism.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "check-channel-integrity",
+      "source_path": "scripts/check-channel-integrity.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "check-docs-architecture",
+      "source_path": "scripts/check-docs-architecture.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "check-domain-ownership",
+      "source_path": "scripts/check-domain-ownership.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "check-entrypoint-packaging",
+      "source_path": "scripts/check-entrypoint-packaging.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "check-handoff-receipts",
+      "source_path": "scripts/check-handoff-receipts.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "check-lane-liveness",
+      "source_path": "scripts/check-lane-liveness.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "check-path-containment",
+      "source_path": "scripts/check-path-containment.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "check-plugin-root-fallback",
+      "source_path": "scripts/check-plugin-root-fallback.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "check-roster-consistency",
+      "source_path": "scripts/check-roster-consistency.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "classify-proposal",
+      "source_path": "scripts/classify-proposal.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "codex-guild-prompt-bridge",
+      "source_path": "scripts/codex-guild-prompt-bridge.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "comms/comms-format-lint",
+      "source_path": "scripts/comms/comms-format-lint.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "comms/comms-format-lint.cli",
+      "source_path": "scripts/comms/comms-format-lint.cli.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "comms/no-accidental-write",
+      "source_path": "scripts/comms/no-accidental-write.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "comms/no-accidental-write.cli",
+      "source_path": "scripts/comms/no-accidental-write.cli.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "compile",
+      "source_path": "scripts/compile.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "config-cmd",
+      "source_path": "scripts/config-cmd.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dashboard-launch",
+      "source_path": "scripts/dashboard-launch.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "definition-ref-for-dispatch",
+      "source_path": "scripts/definition-ref-for-dispatch.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "description-optimizer",
+      "source_path": "scripts/description-optimizer.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "desktop-app-smoke",
+      "source_path": "scripts/desktop-app-smoke.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "docs-hygiene/check-symbol-citations",
+      "source_path": "scripts/docs-hygiene/check-symbol-citations.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "docs-hygiene/scan",
+      "source_path": "scripts/docs-hygiene/scan.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/audit",
+      "source_path": "scripts/dot-guild/audit.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/convert/convert",
+      "source_path": "scripts/dot-guild/convert/convert.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/convert/detect",
+      "source_path": "scripts/dot-guild/convert/detect.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/convert/index",
+      "source_path": "scripts/dot-guild/convert/index.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/convert/keymap",
+      "source_path": "scripts/dot-guild/convert/keymap.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/convert/report",
+      "source_path": "scripts/dot-guild/convert/report.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/convert/seams",
+      "source_path": "scripts/dot-guild/convert/seams.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/convert/snapshot",
+      "source_path": "scripts/dot-guild/convert/snapshot.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/convert/types",
+      "source_path": "scripts/dot-guild/convert/types.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/convert/wiki-importance",
+      "source_path": "scripts/dot-guild/convert/wiki-importance.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/migrate",
+      "source_path": "scripts/dot-guild/migrate.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/migrate-guild",
+      "source_path": "scripts/dot-guild/migrate-guild.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "dot-guild/scrub",
+      "source_path": "scripts/dot-guild/scrub.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "emit-loop-event",
+      "source_path": "scripts/emit-loop-event.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "emit-release-conformance",
+      "source_path": "scripts/emit-release-conformance.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "evolve-loop",
+      "source_path": "scripts/evolve-loop.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "feedback-triage",
+      "source_path": "scripts/feedback-triage.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "finalize-stable-release",
+      "source_path": "scripts/finalize-stable-release.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "flip-report",
+      "source_path": "scripts/flip-report.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "generate-support-matrix",
+      "source_path": "scripts/generate-support-matrix.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "guild-run",
+      "source_path": "scripts/guild-run.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "hooks/dist/run-trace",
+      "source_path": "hooks/dist/run-trace.js",
+      "kind": "cli"
+    },
+    {
+      "id": "host-smoke",
+      "source_path": "scripts/host-smoke.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "ideation-min-build-cli",
+      "source_path": "scripts/ideation-min-build-cli.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "index-migrate",
+      "source_path": "scripts/index-migrate.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "initiative-gate",
+      "source_path": "scripts/initiative-gate.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "instantiate-template",
+      "source_path": "scripts/instantiate-template.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "knowledge-links-builder",
+      "source_path": "scripts/knowledge-links-builder.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "knowledge-links-traverse",
+      "source_path": "scripts/knowledge-links-traverse.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "lane-receipt-wait",
+      "source_path": "scripts/lane-receipt-wait.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/analyze-structural",
+      "source_path": "scripts/learn/analyze-structural.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/assign-layers",
+      "source_path": "scripts/learn/assign-layers.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/build-tour",
+      "source_path": "scripts/learn/build-tour.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/content-analyze",
+      "source_path": "scripts/learn/content-analyze.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/cost-gate",
+      "source_path": "scripts/learn/cost-gate.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/cross-link",
+      "source_path": "scripts/learn/cross-link.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/derive-domain",
+      "source_path": "scripts/learn/derive-domain.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/diagram-analyze",
+      "source_path": "scripts/learn/diagram-analyze.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/diff-learn",
+      "source_path": "scripts/learn/diff-learn.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/extract-structural",
+      "source_path": "scripts/learn/extract-structural.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/k-stage-staleness",
+      "source_path": "scripts/learn/k-stage-staleness.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/kg-query",
+      "source_path": "scripts/learn/kg-query.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/knowledge-orchestrator",
+      "source_path": "scripts/learn/knowledge-orchestrator.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/learn-route",
+      "source_path": "scripts/learn/learn-route.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/bundle-validate",
+      "source_path": "scripts/learn/lib/bundle-validate.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/domain",
+      "source_path": "scripts/learn/lib/domain.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/extract",
+      "source_path": "scripts/learn/lib/extract.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/fingerprint",
+      "source_path": "scripts/learn/lib/fingerprint.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/git",
+      "source_path": "scripts/learn/lib/git.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/graph",
+      "source_path": "scripts/learn/lib/graph.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/graph-query",
+      "source_path": "scripts/learn/lib/graph-query.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/graph-query-projection",
+      "source_path": "scripts/learn/lib/graph-query-projection.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/ignore",
+      "source_path": "scripts/learn/lib/ignore.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/impact",
+      "source_path": "scripts/learn/lib/impact.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/import-map",
+      "source_path": "scripts/learn/lib/import-map.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/knowledge-links-io",
+      "source_path": "scripts/learn/lib/knowledge-links-io.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/languages",
+      "source_path": "scripts/learn/lib/languages.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/layers",
+      "source_path": "scripts/learn/lib/layers.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/parity-harness",
+      "source_path": "scripts/learn/lib/parity-harness.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/paths",
+      "source_path": "scripts/learn/lib/paths.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/resolve-calls-py",
+      "source_path": "scripts/learn/lib/resolve-calls-py.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/resolve-calls-ts",
+      "source_path": "scripts/learn/lib/resolve-calls-ts.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/resolved-call",
+      "source_path": "scripts/learn/lib/resolved-call.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/schema",
+      "source_path": "scripts/learn/lib/schema.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/similarity",
+      "source_path": "scripts/learn/lib/similarity.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/structural",
+      "source_path": "scripts/learn/lib/structural.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/tour",
+      "source_path": "scripts/learn/lib/tour.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/lib/walk",
+      "source_path": "scripts/learn/lib/walk.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/resolve-calls",
+      "source_path": "scripts/learn/resolve-calls.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/scan",
+      "source_path": "scripts/learn/scan.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/staleness",
+      "source_path": "scripts/learn/staleness.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/taxonomy-build",
+      "source_path": "scripts/learn/taxonomy-build.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/validate-graph",
+      "source_path": "scripts/learn/validate-graph.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/wiki-index",
+      "source_path": "scripts/learn/wiki-index.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/wiki-lint-knowledge",
+      "source_path": "scripts/learn/wiki-lint-knowledge.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "learn/write-knowledge-links",
+      "source_path": "scripts/learn/write-knowledge-links.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "lib/adapter-fallback-ladders",
+      "source_path": "scripts/lib/adapter-fallback-ladders.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/advisory-record",
+      "source_path": "scripts/lib/advisory-record.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/artifact-bus",
+      "source_path": "scripts/lib/artifact-bus.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/atomic-write",
+      "source_path": "scripts/lib/atomic-write.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/benchmark-guild-artifacts",
+      "source_path": "scripts/lib/benchmark-guild-artifacts.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/adoption-migrate",
+      "source_path": "scripts/lib/capability/adoption-migrate.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/backend-factory",
+      "source_path": "scripts/lib/capability/backend-factory.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/candidate-surface",
+      "source_path": "scripts/lib/capability/candidate-surface.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/capability-profile-evidence",
+      "source_path": "scripts/lib/capability/capability-profile-evidence.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/compatibility-catalog",
+      "source_path": "scripts/lib/capability/compatibility-catalog.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/compatibility-loader",
+      "source_path": "scripts/lib/capability/compatibility-loader.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/compatibility-usage",
+      "source_path": "scripts/lib/capability/compatibility-usage.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/context-manager-contract",
+      "source_path": "scripts/lib/capability/context-manager-contract.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/definition-ref-for-dispatch",
+      "source_path": "scripts/lib/capability/definition-ref-for-dispatch.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/inline-specialist-identity",
+      "source_path": "scripts/lib/capability/inline-specialist-identity.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/migration-evidence",
+      "source_path": "scripts/lib/capability/migration-evidence.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/migration-window",
+      "source_path": "scripts/lib/capability/migration-window.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/profile-emit",
+      "source_path": "scripts/lib/capability/profile-emit.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/rank",
+      "source_path": "scripts/lib/capability/rank.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/resolver-mode",
+      "source_path": "scripts/lib/capability/resolver-mode.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/router",
+      "source_path": "scripts/lib/capability/router.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/self-build-canonicalize",
+      "source_path": "scripts/lib/capability/self-build-canonicalize.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/strangler-control",
+      "source_path": "scripts/lib/capability/strangler-control.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/tiebreak",
+      "source_path": "scripts/lib/capability/tiebreak.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/tier-defaults",
+      "source_path": "scripts/lib/capability/tier-defaults.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/capability/workspace-role-localize",
+      "source_path": "scripts/lib/capability/workspace-role-localize.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/classify-intake",
+      "source_path": "scripts/lib/classify-intake.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/cloud-consent-gate",
+      "source_path": "scripts/lib/cloud-consent-gate.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/cloud-task-packet",
+      "source_path": "scripts/lib/cloud-task-packet.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/command-registry",
+      "source_path": "scripts/lib/command-registry.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/config-reconcile",
+      "source_path": "scripts/lib/config-reconcile.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/config-reconcile-contract",
+      "source_path": "scripts/lib/config-reconcile-contract.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/config-render",
+      "source_path": "scripts/lib/config-render.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/config-schema",
+      "source_path": "scripts/lib/config-schema.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/config-ui-metadata",
+      "source_path": "scripts/lib/config-ui-metadata.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/config-ui-surface",
+      "source_path": "scripts/lib/config-ui-surface.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/core/config-cli",
+      "source_path": "scripts/lib/core/config-cli.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/core/contracts/adoption-manifest",
+      "source_path": "scripts/lib/core/contracts/adoption-manifest.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/core/contracts/context-bundle-definition-ref",
+      "source_path": "scripts/lib/core/contracts/context-bundle-definition-ref.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/core/contracts/federation-definition-manifest-ref",
+      "source_path": "scripts/lib/core/contracts/federation-definition-manifest-ref.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/core/contracts/project-capability-profile",
+      "source_path": "scripts/lib/core/contracts/project-capability-profile.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/core/contracts/project-definition-ref",
+      "source_path": "scripts/lib/core/contracts/project-definition-ref.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/core/contracts/specialist-identity",
+      "source_path": "scripts/lib/core/contracts/specialist-identity.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/core/contracts/task-cell-backend",
+      "source_path": "scripts/lib/core/contracts/task-cell-backend.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/core/contracts/team-backend",
+      "source_path": "scripts/lib/core/contracts/team-backend.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/core/settings-reader",
+      "source_path": "scripts/lib/core/settings-reader.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/define-schema",
+      "source_path": "scripts/lib/define-schema.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/define-test-matrix",
+      "source_path": "scripts/lib/define-test-matrix.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/define-traceability",
+      "source_path": "scripts/lib/define-traceability.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/definition-artifact-resolver",
+      "source_path": "scripts/lib/definition-artifact-resolver.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/degradation-trace",
+      "source_path": "scripts/lib/degradation-trace.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/emit-readback-degradation",
+      "source_path": "scripts/lib/emit-readback-degradation.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/emit-remote-orphan",
+      "source_path": "scripts/lib/emit-remote-orphan.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/equivalence-contract",
+      "source_path": "scripts/lib/equivalence-contract.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/explore-schema",
+      "source_path": "scripts/lib/explore-schema.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/frontmatter",
+      "source_path": "scripts/lib/frontmatter.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/fs-scanner",
+      "source_path": "scripts/lib/fs-scanner.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/guild-artifact-paths",
+      "source_path": "scripts/lib/guild-artifact-paths.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/guild-discovery",
+      "source_path": "scripts/lib/guild-discovery.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/guild-root",
+      "source_path": "scripts/lib/guild-root.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/guild-run-wrapper",
+      "source_path": "scripts/lib/guild-run-wrapper.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/guild-trace-emit",
+      "source_path": "scripts/lib/guild-trace-emit.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/guild-trace-events",
+      "source_path": "scripts/lib/guild-trace-events.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapter-contract",
+      "source_path": "scripts/lib/host-adapter-contract.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapter-factory",
+      "source_path": "scripts/lib/host-adapter-factory.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapters/agents-file",
+      "source_path": "scripts/lib/host-adapters/agents-file.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapters/antigravity-cli",
+      "source_path": "scripts/lib/host-adapters/antigravity-cli.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapters/app-host",
+      "source_path": "scripts/lib/host-adapters/app-host.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapters/claude-code-cli",
+      "source_path": "scripts/lib/host-adapters/claude-code-cli.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapters/codex-cli",
+      "source_path": "scripts/lib/host-adapters/codex-cli.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapters/cursor",
+      "source_path": "scripts/lib/host-adapters/cursor.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapters/github-copilot",
+      "source_path": "scripts/lib/host-adapters/github-copilot.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapters/opencode",
+      "source_path": "scripts/lib/host-adapters/opencode.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapters/pi-cli",
+      "source_path": "scripts/lib/host-adapters/pi-cli.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapters/rovo-dev",
+      "source_path": "scripts/lib/host-adapters/rovo-dev.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-adapters/wrapped-cli-base",
+      "source_path": "scripts/lib/host-adapters/wrapped-cli-base.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-capabilities-schema",
+      "source_path": "scripts/lib/host-capabilities-schema.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-id-namespace",
+      "source_path": "scripts/lib/host-id-namespace.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-open-preflight",
+      "source_path": "scripts/lib/host-open-preflight.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-profiles-validate",
+      "source_path": "scripts/lib/host-profiles-validate.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-public-state",
+      "source_path": "scripts/lib/host-public-state.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-registry",
+      "source_path": "scripts/lib/host-registry.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-registry-schema",
+      "source_path": "scripts/lib/host-registry-schema.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-router",
+      "source_path": "scripts/lib/host-router.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-smoke-store",
+      "source_path": "scripts/lib/host-smoke-store.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host-types",
+      "source_path": "scripts/lib/host-types.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host/cmux-backend",
+      "source_path": "scripts/lib/host/cmux-backend.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host/inprocess-backend",
+      "source_path": "scripts/lib/host/inprocess-backend.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host/pane-dispatch-trace",
+      "source_path": "scripts/lib/host/pane-dispatch-trace.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host/remote-backend",
+      "source_path": "scripts/lib/host/remote-backend.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/host/tmux-backend",
+      "source_path": "scripts/lib/host/tmux-backend.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/ideation-min-build",
+      "source_path": "scripts/lib/ideation-min-build.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/index-cache",
+      "source_path": "scripts/lib/index-cache.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/ingest-importance",
+      "source_path": "scripts/lib/ingest-importance.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/ingest-similarity",
+      "source_path": "scripts/lib/ingest-similarity.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/initiative",
+      "source_path": "scripts/lib/initiative.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/initiative-activity",
+      "source_path": "scripts/lib/initiative-activity.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/initiative-workitems",
+      "source_path": "scripts/lib/initiative-workitems.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/inventory-schema",
+      "source_path": "scripts/lib/inventory-schema.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/isolated-host-install",
+      "source_path": "scripts/lib/isolated-host-install.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/kb-snapshot",
+      "source_path": "scripts/lib/kb-snapshot.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/lane-receipt",
+      "source_path": "scripts/lib/lane-receipt.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/learning-candidate",
+      "source_path": "scripts/lib/learning-candidate.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/learning-signatures",
+      "source_path": "scripts/lib/learning-signatures.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/memory-adapter",
+      "source_path": "scripts/lib/memory-adapter.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/mixed-host-contracts",
+      "source_path": "scripts/lib/mixed-host-contracts.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/module-manifest",
+      "source_path": "scripts/lib/module-manifest.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/module-resources",
+      "source_path": "scripts/lib/module-resources.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/owner-architect-loop",
+      "source_path": "scripts/lib/owner-architect-loop.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/pane-adapter",
+      "source_path": "scripts/lib/pane-adapter.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/parity-contract",
+      "source_path": "scripts/lib/parity-contract.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/path-containment-registry",
+      "source_path": "scripts/lib/path-containment-registry.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/path-containment-scan",
+      "source_path": "scripts/lib/path-containment-scan.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/per-host-packaging",
+      "source_path": "scripts/lib/per-host-packaging.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/permission-policy",
+      "source_path": "scripts/lib/permission-policy.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/permission-policy-schema",
+      "source_path": "scripts/lib/permission-policy-schema.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/protect-chunks",
+      "source_path": "scripts/lib/protect-chunks.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/provider-detect",
+      "source_path": "scripts/lib/provider-detect.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/reaping",
+      "source_path": "scripts/lib/reaping.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/recall",
+      "source_path": "scripts/lib/recall.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/recall-protect",
+      "source_path": "scripts/lib/recall-protect.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/release-distribution-contract",
+      "source_path": "scripts/lib/release-distribution-contract.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/release-package-identity",
+      "source_path": "scripts/lib/release-package-identity.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/replay-rundir",
+      "source_path": "scripts/lib/replay-rundir.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/result-contracts",
+      "source_path": "scripts/lib/result-contracts.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/result-normalizer",
+      "source_path": "scripts/lib/result-normalizer.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/retention",
+      "source_path": "scripts/lib/retention.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/review-pairing",
+      "source_path": "scripts/lib/review-pairing.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/review-progress",
+      "source_path": "scripts/lib/review-progress.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/role-model-schema",
+      "source_path": "scripts/lib/role-model-schema.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/role-resolver",
+      "source_path": "scripts/lib/role-resolver.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/roster",
+      "source_path": "scripts/lib/roster.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/routing-ab-contract",
+      "source_path": "scripts/lib/routing-ab-contract.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/run-binding",
+      "source_path": "scripts/lib/run-binding.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/run-events",
+      "source_path": "scripts/lib/run-events.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/run-learning-classifier",
+      "source_path": "scripts/lib/run-learning-classifier.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/run-lifecycle",
+      "source_path": "scripts/lib/run-lifecycle.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/run-manifest-wiring",
+      "source_path": "scripts/lib/run-manifest-wiring.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/run-record-validate",
+      "source_path": "scripts/lib/run-record-validate.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/run-sinks",
+      "source_path": "scripts/lib/run-sinks.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/runstart-preflight",
+      "source_path": "scripts/lib/runstart-preflight.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/sanitized-run-export",
+      "source_path": "scripts/lib/sanitized-run-export.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/self-update",
+      "source_path": "scripts/lib/self-update.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/session-context",
+      "source_path": "scripts/lib/session-context.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/settings-resolver",
+      "source_path": "scripts/lib/settings-resolver.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/shared/bm25",
+      "source_path": "scripts/lib/shared/bm25.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/shared/config-defaults",
+      "source_path": "scripts/lib/shared/config-defaults.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/shared/graph-scoring",
+      "source_path": "scripts/lib/shared/graph-scoring.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/shared/safe-object",
+      "source_path": "scripts/lib/shared/safe-object.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/shared/scrub-redact",
+      "source_path": "scripts/lib/shared/scrub-redact.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/shared/secret-patterns",
+      "source_path": "scripts/lib/shared/secret-patterns.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/shared/share-set",
+      "source_path": "scripts/lib/shared/share-set.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/skill-source-transform",
+      "source_path": "scripts/lib/skill-source-transform.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/state/ensure-storage-layout",
+      "source_path": "scripts/lib/state/ensure-storage-layout.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/state/storage",
+      "source_path": "scripts/lib/state/storage.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/state/storage-gc",
+      "source_path": "scripts/lib/state/storage-gc.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/state/upgrade-chain",
+      "source_path": "scripts/lib/state/upgrade-chain.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/support-matrix",
+      "source_path": "scripts/lib/support-matrix.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/surface-manifest",
+      "source_path": "scripts/lib/surface-manifest.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/task-cell-launch-plan",
+      "source_path": "scripts/lib/task-cell-launch-plan.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/team-backend",
+      "source_path": "scripts/lib/team-backend.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/team-file",
+      "source_path": "scripts/lib/team-file.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/template-schema",
+      "source_path": "scripts/lib/template-schema.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/update-check",
+      "source_path": "scripts/lib/update-check.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/wiki-recall",
+      "source_path": "scripts/lib/wiki-recall.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/workspace-project-root",
+      "source_path": "scripts/lib/workspace-project-root.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lib/write-back-scored-tier",
+      "source_path": "scripts/lib/write-back-scored-tier.ts",
+      "kind": "lib"
+    },
+    {
+      "id": "lint-context-bundle",
+      "source_path": "scripts/lint-context-bundle.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "lint/build-coverage-draft",
+      "source_path": "scripts/lint/build-coverage-draft.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "lint/description-budget",
+      "source_path": "scripts/lint/description-budget.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "lint/hot-path-budget",
+      "source_path": "scripts/lint/hot-path-budget.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "lint/layout-laws",
+      "source_path": "scripts/lint/layout-laws.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "lint/packaged-install-smoke",
+      "source_path": "scripts/lint/packaged-install-smoke.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "lint/skill-link-integrity",
+      "source_path": "scripts/lint/skill-link-integrity.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "mark-lane-dead",
+      "source_path": "scripts/mark-lane-dead.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "models-cmd",
+      "source_path": "scripts/models-cmd.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "oq11-gate-check",
+      "source_path": "scripts/oq11-gate-check.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "pane-send",
+      "source_path": "scripts/pane-send.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "permission-policy",
+      "source_path": "scripts/permission-policy.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "read-guild-config",
+      "source_path": "scripts/read-guild-config.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "recall-stats",
+      "source_path": "scripts/recall-stats.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "registry-rollup",
+      "source_path": "scripts/registry-rollup.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "release-changelog",
+      "source_path": "scripts/release-changelog.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "resolve-specialist-capability-scope",
+      "source_path": "scripts/resolve-specialist-capability-scope.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "resume-lanes",
+      "source_path": "scripts/resume-lanes.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "retry-lane",
+      "source_path": "scripts/retry-lane.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "rollback-walker",
+      "source_path": "scripts/rollback-walker.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "roster-resolve",
+      "source_path": "scripts/roster-resolve.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "run-analysis",
+      "source_path": "scripts/run-analysis.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "runtime-usage",
+      "source_path": "scripts/runtime-usage.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "score-tier",
+      "source_path": "scripts/score-tier.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "self-build-canonicalize",
+      "source_path": "scripts/self-build-canonicalize.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "shadow-mode",
+      "source_path": "scripts/shadow-mode.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "sign-release-attestation",
+      "source_path": "scripts/sign-release-attestation.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "stamp-recall-importance",
+      "source_path": "scripts/stamp-recall-importance.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "station-compose",
+      "source_path": "scripts/station-compose.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "sync-migration",
+      "source_path": "scripts/sync-migration.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "task-cell-audit",
+      "source_path": "scripts/task-cell-audit.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "task-cell-host-conformance",
+      "source_path": "scripts/task-cell-host-conformance.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "task-cell-policy-eval",
+      "source_path": "scripts/task-cell-policy-eval.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "task-cell-scale-audit",
+      "source_path": "scripts/task-cell-scale-audit.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "task-cell-team-result",
+      "source_path": "scripts/task-cell-team-result.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "task-cell-telemetry",
+      "source_path": "scripts/task-cell-telemetry.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "team-decide",
+      "source_path": "scripts/team-decide.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "trace-summarize",
+      "source_path": "scripts/trace-summarize.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "types/js-yaml.d",
+      "source_path": "scripts/types/js-yaml.d.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "v1.4-log-validator",
+      "source_path": "scripts/v1.4-log-validator.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "validate-run-record",
+      "source_path": "scripts/validate-run-record.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "verify-codex-review-trail",
+      "source_path": "scripts/verify-codex-review-trail.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "verify-desktop-app-smoke",
+      "source_path": "scripts/verify-desktop-app-smoke.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "verify-gate-pass",
+      "source_path": "scripts/verify-gate-pass.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "verify-host-packages",
+      "source_path": "scripts/verify-host-packages.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "verify-installer",
+      "source_path": "scripts/verify-installer.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "wiki-lint-checks",
+      "source_path": "scripts/wiki-lint-checks.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "wiki-promote",
+      "source_path": "scripts/wiki-promote.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "wiki-revert",
+      "source_path": "scripts/wiki-revert.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "work-loop",
+      "source_path": "scripts/work-loop.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "workspace-role-localize",
+      "source_path": "scripts/workspace-role-localize.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "workspace/check-command-coverage",
+      "source_path": "scripts/workspace/check-command-coverage.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "workspace/check-doc-sync",
+      "source_path": "scripts/workspace/check-doc-sync.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "workspace/detect",
+      "source_path": "scripts/workspace/detect.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "workspace/federated-query",
+      "source_path": "scripts/workspace/federated-query.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "workspace/promote-upstream",
+      "source_path": "scripts/workspace/promote-upstream.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "workspace/write-manifest",
+      "source_path": "scripts/workspace/write-manifest.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "write-host-capability",
+      "source_path": "scripts/write-host-capability.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "write-run-manifest",
+      "source_path": "scripts/write-run-manifest.ts",
+      "kind": "cli"
+    },
+    {
+      "id": "write-task-run",
+      "source_path": "scripts/write-task-run.ts",
+      "kind": "cli"
+    }
+  ],
+  "schemas": [
+    {
+      "id": "guild.handoff.v2",
+      "source_path": "plugin/hooks/lib/handoff-v2.ts",
+      "status": "exists",
+      "validator_kind": "strict"
+    },
+    {
+      "id": "guild.host_event.v1",
+      "source_path": "plugin/src/domains/distribution/result-contracts-v2.ts",
+      "status": "exists",
+      "validator_kind": "strict"
+    },
+    {
+      "id": "guild.permission_receipt.v1",
+      "source_path": "plugin/src/domains/distribution/result-contracts-v2.ts",
+      "status": "exists",
+      "validator_kind": "strict"
+    },
+    {
+      "id": "guild.phase_result.v1",
+      "source_path": "plugin/src/domains/distribution/result-contracts-v2.ts",
+      "status": "exists",
+      "validator_kind": "strict"
+    },
+    {
+      "id": "guild.qa_result.v1",
+      "source_path": "plugin/src/domains/distribution/result-contracts-v2.ts",
+      "status": "exists",
+      "validator_kind": "strict"
+    },
+    {
+      "id": "review_result.v1",
+      "source_path": "plugin/scripts/verify-gate-pass.ts",
+      "status": "exists",
+      "validator_kind": "lenient"
+    }
+  ],
+  "docs": [
+    {
+      "id": "docs/generated/host-support-matrix",
+      "source_path": "docs/generated/host-support-matrix.md"
+    }
+  ]
+}

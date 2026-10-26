@@ -1,0 +1,20 @@
+{
+  "schema_version": "guild.module_manifest.v1",
+  "id": "evals",
+  "title": "Evaluation Rails",
+  "kind": "operator",
+  "implementation_mode": "workflow-backed",
+  "description": "Owns benchmark-oriented artifacts, test matrix definitions, replay, and validation helpers used by gates.",
+  "depends_on": ["kernel", "state"],
+  "owns": {
+    "scripts": [
+      "lib/benchmark-guild-artifacts",
+      "lib/define-schema",
+      "lib/define-test-matrix",
+      "lib/define-traceability",
+      "lib/explore-schema",
+      "lib/routing-ab-contract",
+      "task-cell-policy-eval"
+    ]
+  }
+}

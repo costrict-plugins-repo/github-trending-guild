@@ -1,0 +1,234 @@
+/**
+ * tests/universal-host/p1-sc8-adapter-ladder.test.ts
+ *
+ * P1 SC-8 — ADAPTER FALLBACK LADDER (C3): minimum-loss degradation + receipts.
+ *
+ * Each of the four adapter surfaces (interaction / session / semantic_tool / browser)
+ * degrades through the explicit chain `native > wrapped > bridged > emulated >
+ * degraded` per host, and `resolveRung()` records the chosen rung in a receipt.
+ * Routing reads the TABLE, never the host name; an UNKNOWN host degrades + records
+ * (never silently assumes a capability).
+ *
+ * REAL PATH (no seam): the SHIPPED `resolveRung()` / `validateDegradationReceipt()` /
+ * `validateLadderTableComplete()` + the frozen `FALLBACK_LADDER_TABLE` are exercised
+ * directly. The verbatim gated rungs are pinned cell-by-cell so a silent table edit
+ * fails; the unknown-host fail path is the RED discriminator.
+ *
+ * Status at authoring: GREEN (P1-L0 shipped C3). L11 (tooling-engineer) builds the
+ * runtime adapters against this table (asserted live when the adapters land).
+ */
+
+import { describe, it, expect } from "bun:test";
+import {
+  RUNGS,
+  ADAPTER_SURFACES,
+  rungLoss,
+  FALLBACK_LADDER_TABLE,
+  INFERRED_HOSTS,
+  isHostInferred,
+  resolveRung,
+  validateDegradationReceipt,
+  validateLadderTableComplete,
+  type AdapterSurface,
+  type Rung,
+} from "../../scripts/lib/adapter-fallback-ladders";
+import { HOST_IDS, type HostId } from "../../scripts/lib/host-registry-schema";
+
+// ── Table completeness + verbatim rungs ─────────────────────────────────────
+
+describe("P1 SC-8 — ladder table is complete (4 surfaces × 16 hosts)", () => {
+  it("validateLadderTableComplete passes", () => {
+    const r = validateLadderTableComplete();
+    expect(r.errors).toEqual([]);
+    expect(r.valid).toBe(true);
+  });
+
+  it("every surface has a valid rung for every registry host id", () => {
+    for (const surface of ADAPTER_SURFACES) {
+      for (const host of HOST_IDS) {
+        expect(RUNGS as readonly string[]).toContain(FALLBACK_LADDER_TABLE[surface][host]);
+      }
+    }
+  });
+
+  // Pin the ENTIRE gated C3 table verbatim — EVERY one of the 4×16 cells, not just
+  // the "notable" ones, so a silent edit to ANY cell (e.g. session.codex,
+  // semantic_tool.antigravity) fails (codex G-lane round-1 MINOR).
+  it("pins the verbatim gated rung table — all 4×16 cells exactly", () => {
+    // Oracle refreshed to the CURRENT production FALLBACK_LADDER_TABLE after the
+    // host-adapter-migration renamed the roster to the canonical 9 host ids
+    // (claude→claude-code-cli, codex→codex-cli, .agents→agents-file, pi→pi-cli,
+    // antigravity→antigravity-cli) and added the four app/connector surfaces
+    // (claude-code-app, claude-code-web, codex-app, claude-ai-connector), all of
+    // which degrade across every surface. The RUNG VALUES for the original five
+    // hosts are byte-identical to the pre-rename pin (pure key rename); the four
+    // app/connector rows are the new canonical-roster additions (all "degraded").
+    //
+    // G4b (verified-multi-host, host-reachability): the registry grew 7 more rows —
+    // 4 wrapped-CLI hosts (cursor/github-copilot/opencode/rovo-dev, INFERRED,
+    // "wrapped"/"emulated"/"bridged"/"degraded" per surface — the same conservative
+    // posture the inferred capability row implies, no live-host verification yet)
+    // and 3 agents-file IDE hosts (kiro/qoder/trae, which DEREFERENCE agents-file
+    // per adapter_binding — their rungs mirror agents-file exactly on every surface).
+    // Sanity-checked against each row's nature (not blindly goldened): every value
+    // below matches the shipped FALLBACK_LADDER_TABLE and looks internally
+    // consistent (no wrapped-CLI host claims a stronger rung than pi/antigravity did
+    // pre-verification; the 3 IDE hosts are byte-identical to agents-file, as their
+    // adapter_binding contract requires).
+    const EXPECTED: Record<AdapterSurface, Record<HostId, Rung>> = {
+      interaction: {
+        "claude-code-cli": "native", "codex-cli": "wrapped", "agents-file": "bridged",
+        "pi-cli": "wrapped", "antigravity-cli": "wrapped",
+        "claude-code-app": "degraded", "claude-code-web": "degraded",
+        "codex-app": "degraded", "claude-ai-connector": "degraded",
+        cursor: "wrapped", "github-copilot": "wrapped", opencode: "wrapped", "rovo-dev": "wrapped",
+        kiro: "bridged", qoder: "bridged", trae: "bridged",
+      },
+      session: {
+        "claude-code-cli": "native", "codex-cli": "wrapped", "agents-file": "emulated",
+        "pi-cli": "native", "antigravity-cli": "wrapped",
+        "claude-code-app": "degraded", "claude-code-web": "degraded",
+        "codex-app": "degraded", "claude-ai-connector": "degraded",
+        cursor: "emulated", "github-copilot": "emulated", opencode: "emulated", "rovo-dev": "emulated",
+        kiro: "emulated", qoder: "emulated", trae: "emulated",
+      },
+      semantic_tool: {
+        "claude-code-cli": "native", "codex-cli": "bridged", "agents-file": "bridged",
+        "pi-cli": "bridged", "antigravity-cli": "bridged",
+        "claude-code-app": "degraded", "claude-code-web": "degraded",
+        "codex-app": "degraded", "claude-ai-connector": "degraded",
+        cursor: "bridged", "github-copilot": "bridged", opencode: "bridged", "rovo-dev": "bridged",
+        kiro: "bridged", qoder: "bridged", trae: "bridged",
+      },
+      browser: {
+        "claude-code-cli": "bridged", "codex-cli": "bridged", "agents-file": "degraded",
+        "pi-cli": "degraded", "antigravity-cli": "native",
+        "claude-code-app": "degraded", "claude-code-web": "degraded",
+        "codex-app": "degraded", "claude-ai-connector": "degraded",
+        cursor: "degraded", "github-copilot": "degraded", opencode: "degraded", "rovo-dev": "degraded",
+        kiro: "degraded", qoder: "degraded", trae: "degraded",
+      },
+    };
+    // Exact whole-table equality — catches any single-cell drift in either direction.
+    expect(FALLBACK_LADDER_TABLE).toEqual(EXPECTED);
+    // And cell-by-cell so a failure names the offending (surface, host).
+    for (const surface of ADAPTER_SURFACES) {
+      for (const host of HOST_IDS) {
+        expect(FALLBACK_LADDER_TABLE[surface][host]).toBe(EXPECTED[surface][host]);
+      }
+    }
+  });
+
+  // The notable non-defaults, called out explicitly for documentation/intent.
+  it("encodes the notable non-defaults (Claude browser=bridged, antigravity browser=native)", () => {
+    expect(FALLBACK_LADDER_TABLE.browser["claude-code-cli"]).toBe("bridged");
+    expect(FALLBACK_LADDER_TABLE.browser["codex-cli"]).toBe("bridged");
+    expect(FALLBACK_LADDER_TABLE.browser["antigravity-cli"]).toBe("native");
+    expect(FALLBACK_LADDER_TABLE.browser["agents-file"]).toBe("degraded");
+  });
+});
+
+// ── rung loss ordering ──────────────────────────────────────────────────────
+
+describe("P1 SC-8 — rung loss ordering (minimum-loss rule)", () => {
+  it("native is loss 0 and degraded is the max; the chain is strictly increasing", () => {
+    expect(rungLoss("native")).toBe(0);
+    expect(rungLoss("degraded")).toBe(RUNGS.length - 1);
+    for (let i = 1; i < RUNGS.length; i++) {
+      expect(rungLoss(RUNGS[i])).toBeGreaterThan(rungLoss(RUNGS[i - 1]));
+    }
+  });
+});
+
+// ── resolveRung receipts for known hosts ────────────────────────────────────
+
+describe("P1 SC-8 — resolveRung produces correct receipts for known hosts", () => {
+  it("returns the table rung + correct degraded/inferred flags for every (surface, host)", () => {
+    for (const surface of ADAPTER_SURFACES) {
+      for (const host of HOST_IDS) {
+        const receipt = resolveRung(surface, host);
+        const expectedRung = FALLBACK_LADDER_TABLE[surface][host];
+        expect(receipt.schema_version).toBe("guild.degradation_receipt.v1");
+        expect(receipt.rung).toBe(expectedRung);
+        expect(receipt.degraded).toBe(rungLoss(expectedRung) > 0);
+        expect(receipt.inferred).toBe(INFERRED_HOSTS.has(host));
+        expect(validateDegradationReceipt(receipt).valid).toBe(true);
+      }
+    }
+  });
+
+  it("claude interaction is native ⇒ degraded:false; codex interaction is wrapped ⇒ degraded:true", () => {
+    expect(resolveRung("interaction", "claude-code-cli").degraded).toBe(false);
+    expect(resolveRung("interaction", "codex-cli").degraded).toBe(true);
+  });
+
+  it("INFERRED set is the agents-file/pi/antigravity + app/connector + G4b's 7 new hosts; claude-code-cli/codex-cli are concrete", () => {
+    // Canonical-roster INFERRED set: agents-file, pi-cli, antigravity-cli plus the
+    // four app/connector surfaces, plus G4b's 7 new hosts (off-box, no live-host
+    // verification yet). claude-code-cli + codex-cli are the only concrete
+    // (live-verified) rows.
+    expect([...INFERRED_HOSTS].sort()).toEqual([
+      "agents-file",
+      "antigravity-cli",
+      "claude-ai-connector",
+      "claude-code-app",
+      "claude-code-web",
+      "codex-app",
+      "cursor",
+      "github-copilot",
+      "kiro",
+      "opencode",
+      "pi-cli",
+      "qoder",
+      "rovo-dev",
+      "trae",
+    ]);
+    expect(isHostInferred("claude-code-cli")).toBe(false);
+    expect(isHostInferred("codex-cli")).toBe(false);
+    expect(isHostInferred("agents-file")).toBe(true);
+  });
+
+  it("a degraded inferred cell carries the INFERRED note in its reason", () => {
+    const r = resolveRung("browser", "agents-file"); // degraded + inferred
+    expect(r.degraded).toBe(true);
+    expect(r.inferred).toBe(true);
+    expect(r.reason).toMatch(/INFERRED/);
+  });
+});
+
+// ── unknown host degrades + records (RED discriminator) ─────────────────────
+
+describe("P1 SC-8 — unknown host fails closed to degraded", () => {
+  it("an unknown host resolves to degraded, NOT silently to some capable rung", () => {
+    const r = resolveRung("interaction", "gemini");
+    expect(r.rung).toBe("degraded");
+    expect(r.degraded).toBe(true);
+    expect(r.inferred).toBe(false); // not an inferred-known cell — genuinely unknown
+    expect(r.host).toBe("gemini");
+    expect(r.reason).toMatch(/unknown host/i);
+    expect(validateDegradationReceipt(r).valid).toBe(true);
+  });
+
+  it("never returns 'native' for an unknown host on any surface", () => {
+    for (const surface of ADAPTER_SURFACES) {
+      expect(resolveRung(surface, "totally-made-up").rung).toBe("degraded");
+    }
+  });
+});
+
+// ── receipt validator fail-fixtures ─────────────────────────────────────────
+
+describe("P1 SC-8 — degradation-receipt validator fail-closed", () => {
+  const good = resolveRung("session", "codex-cli");
+
+  it("rejects an invalid rung, a bad schema_version, and a non-boolean flag", () => {
+    expect(validateDegradationReceipt({ ...good, rung: "supercharged" }).valid).toBe(false);
+    expect(validateDegradationReceipt({ ...good, schema_version: "guild.degradation_receipt.v2" }).valid).toBe(false);
+    expect(validateDegradationReceipt({ ...good, degraded: "yes" }).valid).toBe(false);
+  });
+
+  it("rejects an invalid surface and a non-object", () => {
+    expect(validateDegradationReceipt({ ...good, surface: "telepathy" }).valid).toBe(false);
+    expect(validateDegradationReceipt(null).valid).toBe(false);
+  });
+});
